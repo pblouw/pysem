@@ -17,7 +17,7 @@ class StreamGenerator(object):
     @staticmethod
     def preprocess(article):
         '''Perform basic preprocessing on Wikipedia article text'''
-        text = re.sub("<.*>", "", article)
+        text = re.sub("<.*>|<|>", "", article)
         text = text.decode('unicode_escape')
         text = text.encode('ascii', 'ignore')
         text = text.split('\n')[3:]
