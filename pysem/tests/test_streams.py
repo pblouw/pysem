@@ -19,12 +19,14 @@ def test_stream_build():
 
     assert execinfo.value.message == 'sample larger than population'
 
+
 def test_stream():
     wikitext = StreamGenerator(corpus_path)
     streams = wikitext.build_streams(n_streams=2, n_files=1)
 
     for stream in streams:
         assert isinstance(stream.next(), str)
+
 
 def test_preprocess():
     wikitext = StreamGenerator(corpus_path)
@@ -35,6 +37,6 @@ def test_preprocess():
 
     pattern = re.compile(r"<.*>")
     assert not pattern.findall(text)
-    
+
     pattern = re.compile(r"\n")
     assert not pattern.findall(text)
