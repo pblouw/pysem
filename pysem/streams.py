@@ -18,7 +18,8 @@ class StreamGenerator(object):
     def preprocess(article):
         '''Perform basic preprocessing on Wikipedia article text'''
         text = re.sub("<.*>", "", article)
-        text = text.decode('utf-8')
+        text = text.decode('unicode_escape')
+        text = text.encode('ascii', 'ignore')
         text = text.split('\n')[3:]
         text = ' '.join(text)
         sen_list = tokenizer.tokenize(text)
