@@ -3,13 +3,13 @@ import re
 import types
 import pytest
 
-from pysem.streams import StreamGenerator
+from pysem.streams import WikiHandler
 
 corpus_path = os.getcwd() + '/pysem/tests/corpora'
 
 
 def test_stream_build():
-    wikitext = StreamGenerator(corpus_path)
+    wikitext = WikiHandler(corpus_path)
     streams = wikitext.build_streams(n_streams=1, n_files=1)
 
     assert isinstance(streams.pop(), types.GeneratorType)
@@ -21,7 +21,7 @@ def test_stream_build():
 
 
 def test_stream():
-    wikitext = StreamGenerator(corpus_path)
+    wikitext = WikiHandler(corpus_path)
     streams = wikitext.build_streams(n_streams=2, n_files=1)
 
     for stream in streams:
@@ -29,7 +29,7 @@ def test_stream():
 
 
 def test_preprocess():
-    wikitext = StreamGenerator(corpus_path)
+    wikitext = WikiHandler(corpus_path)
     streams = wikitext.build_streams(n_streams=1, n_files=1)
 
     sens = list(streams.pop())
