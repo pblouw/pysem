@@ -6,7 +6,7 @@ import nltk
 tokenizer = nltk.load('tokenizers/punkt/english.pickle')
 
 
-class StreamGenerator(object):
+class WikiHandler(object):
     """
     Builds a list of streams that stream sentences from random subsets of a
     Wikipedia dump (the location of which must be given to the constructor).
@@ -53,14 +53,20 @@ class StreamGenerator(object):
 
         return streams
 
+    def cache(self, cachepath, streams):
+        '''Caches preprocessed articles in a specified directory'''
+        with open(cachepath+'cachtest.txt', 'w') as f:
+            for stream in streams:
+                for sen in stream:
+                    f.write(sen + '\n')
+
 
 if __name__ == '__main__':
 
     corpuspath = '/Users/peterblouw/corpora/wikipedia'
-    wikitext = StreamGenerator(corpuspath)
+    cachepath = '/Users/peterblouw/'
+
+    wikitext = WikiHandler(corpuspath)
 
     streams = wikitext.build_streams(1, 1)
-
-    for stream in streams:
-        for sen in stream:
-            print sen
+    wikitext.cache(cachepath, streams)
