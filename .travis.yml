@@ -11,5 +11,5 @@ install:
   - pip install -r requirements.txt
 # command to run tests
 script:
-  - nltk.download('punkt')
+  - python -m nltk.downloader punkt
   - py.test
