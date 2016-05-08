@@ -5,7 +5,7 @@ import pytest
 
 from pysem.streams import StreamGenerator
 
-corpus_path = os.getcwd() + '/tests/corpora'
+corpus_path = os.getcwd() + '/pysem/tests/corpora'
 
 
 def test_stream_build():
