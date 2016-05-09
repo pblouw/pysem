@@ -2,6 +2,7 @@ import os
 import re
 import random
 import nltk
+import json
 
 tokenizer = nltk.load('tokenizers/punkt/english.pickle')
 
@@ -61,12 +62,30 @@ class WikiHandler(object):
                     f.write(sen + '\n')
 
 
+class SnliHandler(object):
+    '''Builds a list of streams of the Standford SNLI corpus'''
+    def __init__(self, corpuspath):
+        self.corpuspath = '/home/pblouw/corpora/snli_1.0'
+
+    def stream(self, n_examples):
+        '''Generator that streams data from SNLI corpus'''
+        with open(self.corpuspath + '/snli_1.0_train.jsonl') as f:
+            for line in f:
+                yield json.loads(line)
+                n_examples -= 1
+                if n_examples == 0:
+                    break
+
+
 if __name__ == '__main__':
 
     corpuspath = '/Users/peterblouw/corpora/wikipedia'
     cachepath = '/Users/peterblouw/'
 
-    wikitext = WikiHandler(corpuspath)
+    wikitext = SnliHandler(corpuspath)
 
-    streams = wikitext.build_streams(1, 1)
-    wikitext.cache(cachepath, streams)
+    for example in wikitext.stream(100):
+        print example['sentence1']
+        print example['sentence2']
+        print example['gold_label']
+        print ''
