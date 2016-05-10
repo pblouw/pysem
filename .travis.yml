@@ -12,4 +12,5 @@ install:
 # command to run tests
 script:
   - python -m nltk.downloader punkt
+  - flake8 pysem
   - py.test
