@@ -7,14 +7,32 @@ import json
 tokenizer = nltk.load('tokenizers/punkt/english.pickle')
 
 
-class WikiHandler(object):
+class CorpusHandler(object):
+    """Base class for handling linguistic corpora"""
+    def __init__(self, corpuspath):
+        self.corpuspath = corpuspath
+
+    def cache(self, cachepath, stream, maxsize=10, count=0):
+        '''Caches stream output in a specified directory'''
+        abspath = cachepath + 'cache_' + str(count) + '.txt'
+
+        with open(abspath, 'w') as cachefile:
+            while True:
+                try:
+                    cachefile.write(next(stream))
+                except StopIteration:
+                    return
+                if os.path.getsize(abspath) > maxsize * 1000000:
+                    break
+
+        self.cache(cachepath, stream, count=count+1)
+
+
+class Wikipedia(CorpusHandler):
     """
     Builds a list of streams that stream sentences from random subsets of a
     Wikipedia dump (the location of which must be given to the constructor).
     """
-    def __init__(self, corpuspath):
-        self.corpuspath = corpuspath
-
     @staticmethod
     def preprocess(article):
         '''Perform basic preprocessing on Wikipedia article text'''
@@ -54,18 +72,11 @@ class WikiHandler(object):
 
         return streams
 
-    def cache(self, cachepath, streams):
-        '''Caches preprocessed articles in a specified directory'''
-        with open(cachepath+'cachtest.txt', 'w') as f:
-            for stream in streams:
-                for sen in stream:
-                    f.write(sen + '\n')
 
-
-class SnliHandler(object):
+class SNLI(CorpusHandler):
     '''Builds a list of streams of the Standford SNLI corpus'''
     def __init__(self, corpuspath):
-        self.corpuspath = '/home/pblouw/corpora/snli_1.0'
+        self.corpuspath = '/Users/peterblouw/corpora/snli_1.0'
 
     def stream(self, n_examples):
         '''Generator that streams data from SNLI corpus'''
@@ -82,10 +93,7 @@ if __name__ == '__main__':
     corpuspath = '/Users/peterblouw/corpora/wikipedia'
     cachepath = '/Users/peterblouw/'
 
-    wikitext = SnliHandler(corpuspath)
+    wikitext = Wikipedia(corpuspath)
 
-    for example in wikitext.stream(100):
-        print example['sentence1']
-        print example['sentence2']
-        print example['gold_label']
-        print ''
+    stream = wikitext.build_streams(1, 10).pop()
+    wikitext.cache(cachepath+'cache/', stream)
