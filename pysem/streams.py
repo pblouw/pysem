@@ -4,6 +4,8 @@ import random
 import nltk
 import json
 
+import multiprocessing as mp
+
 tokenizer = nltk.load('tokenizers/punkt/english.pickle')
 
 
@@ -37,14 +39,27 @@ class Wikipedia(CorpusHandler):
     def preprocess(article):
         '''Perform basic preprocessing on Wikipedia article text'''
         text = re.sub("<.*>|<|>", "", article)
-        text = text.decode('unicode_escape')
+        text = text.decode('utf-8')
         text = text.encode('ascii', 'ignore')
         text = text.split('\n')[3:]
         text = ' '.join(text)
-        sen_list = tokenizer.tokenize(text)
-        sen_list = [s.replace('\n', ' ') for s in sen_list]
+        # sen_list = tokenizer.tokenize(text)
+        # sen_list = [s.replace('\n', ' ') for s in sen_list]
 
-        return sen_list
+        return text
+
+    def doclists(self):
+        n = 100
+        while n > 0:
+            for root, dirs, files in os.walk(self.corpuspath):
+                for file in files:
+                    with open(root + '/' + file, 'r') as f:
+                        articles = f.read().split('</doc>')
+                        yield [self.preprocess(a) for a in articles]
+                        n -= 1
+                        print n
+                        if n == 0:
+                            raise StopIteration
 
     def stream(self, files):
         '''Generator that streams sentences from Wikipedia'''
@@ -88,12 +103,59 @@ class SNLI(CorpusHandler):
                     break
 
 
+def count_sens(article):
+    sen_list = tokenizer.tokenize(article)
+    sen_list = [s.replace('\n', ' ') for s in sen_list]
+    # sen_list = [s.translate(None, string.punctuation) for s in sen_list]
+    # sen_list = [s.translate(None, '1234567890') for s in sen_list]
+    sen_list = [nltk.word_tokenize(s) for s in sen_list]
+    return len(sen_list)
+
+
+def cache(params):  # cachepath, stream, maxsize=10, count=0):
+        '''Caches stream output in a specified directory'''
+        article, path = params
+
+        abspath = path + 'cache.txt'
+
+        try:
+            os.stat(path)
+        except:
+            os.mkdir(path)
+
+        with open(abspath, 'w') as cachefile:
+            cachefile.write(article)
+
+        return count_sens(article)
+
 if __name__ == '__main__':
 
     corpuspath = '/Users/peterblouw/corpora/wikipedia'
-    cachepath = '/Users/peterblouw/'
+    cachepath = '/Users/peterblouw/cache/'
 
     wikitext = Wikipedia(corpuspath)
 
-    stream = wikitext.build_streams(1, 10).pop()
-    wikitext.cache(cachepath+'cache/', stream)
+    pool = mp.Pool()
+    acc = 0
+    for dl in wikitext.doclists():
+        dl = [d for d in dl if len(d) > 0]
+        param_set = [(dl[_], cachepath+str(_)+'/') for _ in range(len(dl))]
+
+        results = pool.map_async(cache, param_set)
+        for r in results.get():
+            acc += r
+
+        print 'Sens in Cache:', acc
+
+        for root, dirs, files in os.walk(corpuspath):
+            for file in files:
+                with open(root + '/' + file, 'r') as f:
+                    articles = f.read().split('</doc>')
+                    print sum([count_sens(Wikipedia.preprocess(a))
+                               for a in articles])
+                    with open(cachepath+'test.txt', 'w') as g:
+                        g.write(' '.join([Wikipedia.preprocess(a)
+                                          for a in articles]))
+
+                    import sys
+                    sys.exit()
