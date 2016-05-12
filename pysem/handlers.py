@@ -3,8 +3,11 @@ import re
 import json
 import nltk
 import platform
+import cPickle as pickle
 # import mputils
 import filters
+
+from sklearn.feature_extraction.text import CountVectorizer
 
 # import multiprocessing as mp
 
@@ -96,78 +99,76 @@ class Wikipedia(DataHandler):
 class SNLI(DataHandler):
     '''Extracts data from the SNLI corpus'''
     def __init__(self):
-        self.path = '/home/pblouw/corpora/snli_1.0/'
-        self.initialize_streams()
+        self.path = '/Users/peterblouw/corpora/snli_1.0/'
+        self._reset_streams()
 
-    def initialize_streams(self):
-        '''Reset all generators that stream corpus data'''
-        self.train_set = self._train_set()
-        self.dev_set = self._dev_set()
-        self.test_set = self._test_set()
-
-    def _train_set(self):
-        '''Generator that streams training data from the SNLI corpus'''
-        with open(self.path + 'snli_1.0_train.jsonl') as f:
+    def _stream(self, filename):
+        '''A template generator for streaming from datasets'''
+        with open(self.path + filename) as f:
             for line in f:
                 yield json.loads(line)
 
-    def _dev_set(self):
-        '''Generator that streams dev data from the SNLI corpus'''
-        with open(self.path + 'snli_1.0_dev.jsonl') as f:
-            for line in f:
-                yield json.loads(line)
+    def _reset_streams(self, func=lambda x: x):
+        '''Reset all generators that stream from datasets'''
+        self.train_data = func(self._train_data())
+        self.dev_data = func(self._dev_data())
+        self.test_data = func(self._test_data())
 
-    def _test_set(self):
-        '''Generator that streams test data from the SNLI corpus'''
-        with open(self.path + 'snli_1.0_test.jsonl') as f:
-            for line in f:
-                yield json.loads(line)
+    def _train_data(self):
+        '''Generator that streams from training dataset'''
+        return self._stream('snli_1.0_train.jsonl')
 
-    @property
-    def train_filter(self):
-        return self._train_filter
+    def _dev_data(self):
+        '''Generator that streams from development dataset'''
+        return self._stream('snli_1.0_dev.jsonl')
 
-    @property
-    def dev_filter(self):
-        return self._dev_filter
+    def _test_data(self):
+        '''Generator that streams from testing dataset'''
+        return self._stream('snli_1.0_test.jsonl')
 
     @property
-    def test_filter(self):
-        return self._test_filter
+    def extractor(self):
+        return self._extraction_function
 
-    @property
-    def batchsize(self):
-        return self._batchsize
+    @extractor.setter
+    def extractor(self, func):
+        self._reset_streams(func=func)
+        self._extractor = func
 
-    @train_filter.setter
-    def train_filter(self, filterfunc):
-        self.train_set = filterfunc(self.train_set)
-        self._train_filter = filterfunc
+    def build_vocab(self):
+        train_text = self.all_text(self._train_data())
+        dev_text = self.all_text(self._dev_data())
+        test_text = self.all_text(self._test_data())
+        all_text = train_text + dev_text + test_text
 
-    @dev_filter.setter
-    def dev_filter(self, filterfunc):
-        self.dev_set = filterfunc(self.dev_set)
-        self._dev_filter = filterfunc
+        with open('text.pickle', 'wb') as handle:
+            pickle.dump(all_text, handle)
 
-    @test_filter.setter
-    def test_filter(self, filterfunc):
-        self.test_set = filterfunc(self.test_set)
-        self._test_filter = filterfunc
+        tokens = nltk.word_tokenize(all_text)
 
-    @batchsize.setter
-    def batchsize(self, n):
-        self._batchsize = n
-        self.train_set = self.collect(self.train_set, n)
-        self.dev_set = self.collect(self.dev_set, n)
-        self.test_set = self.collect(self.test_set, n)
+        self.vocab = sorted(list(set(tokens)))
+
+        with open('vocab.pickle', 'wb') as handle:
+            pickle.dump(self.vocab, handle)
+
+    def load_vocab(self):
+        try:
+            with open('vocab.pickle', 'rb') as handle:
+                self.vocab = pickle.load(handle)
+            with open('text.pickle', 'rb') as handle:
+                self.text = pickle.load(handle)
+        except:
+            print 'No vocab file found!'
 
     @staticmethod
-    def collect(stream, batchsize):
-        while True:
-            acc = []
-            for _ in xrange(batchsize):
-                acc.append(next(stream))
-            yield acc
+    def all_text(snli_stream):
+        acc = []
+        for snli_json in snli_stream:
+            pair = snli_json['sentence1'] + ' ' + snli_json['sentence2']
+            # pair = pair.encode('ascii', 'ignore').lower()
+            acc.append(pair.lower())
+
+        return ' '.join(acc)
 
 
 if __name__ == '__main__':
@@ -180,12 +181,27 @@ if __name__ == '__main__':
         cachepath = '/Users/peterblouw/cache/'
 
     snli = SNLI()
-    # snli.test_filter = mputils.sentence_filter.
+    snli.load_vocab()
+    vectorizer = CountVectorizer(binary=True, vocabulary=set(snli.vocab))
+    vectorizer.fit(snli.vocab)
 
-    sentences = filters.snli_sentences(snli._dev_set())
-    labels = filters.snli_labels(snli._dev_set())
+    snli.extractor = filters.snli_sentences
 
-    for _ in range(100):
-        print sentences.next()
-        print labels.next()
-        print ''
+    print len(vectorizer.get_feature_names())
+    print len(snli.vocab)
+
+    # sentences = filters.snli_sentences(snli.dev_data)
+    # labels = filters.snli_labels(snli.dev_data)
+
+    import numpy as np
+
+    for _ in range(5):
+        sample = next(snli.test_data)
+        sent = sample[1].lower()
+        print sent
+        # print [w for w in sent if str(w) in vectorizer.get_feature_names()]
+        x = vectorizer.transform([sent]).toarray()
+        print x.shape
+        print np.sum(x)
+        print vectorizer.inverse_transform(x)
+        # print np.where(x==1)
