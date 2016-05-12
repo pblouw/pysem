@@ -7,7 +7,7 @@ import cPickle as pickle
 # import mputils
 import filters
 
-from sklearn.feature_extraction.text import CountVectorizer
+# from sklearn.feature_extraction.text import CountVectorizer
 
 # import multiprocessing as mp
 
