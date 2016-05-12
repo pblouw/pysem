@@ -2,22 +2,28 @@ import os
 import re
 import json
 import nltk
-import platform
 import cPickle as pickle
-# import mputils
-import filters
-
-# from sklearn.feature_extraction.text import CountVectorizer
-
-# import multiprocessing as mp
 
 tokenizer = nltk.load('tokenizers/punkt/english.pickle')
 
 
 class DataHandler(object):
     """Base class for handling datasets"""
-    def __init__(self):
-        pass
+    def __init__(self, path):
+        self._path = path
+        self._reset_streams()
+
+    def _reset_stream(self):
+        raise Exception('DataHandlers must immplement a reset method')
+
+    @property
+    def extractor(self):
+        return self._extractor
+
+    @extractor.setter
+    def extractor(self, func):
+        self._reset_streams(func=func)
+        self._extractor = func
 
 
 class Wikipedia(DataHandler):
@@ -25,11 +31,7 @@ class Wikipedia(DataHandler):
     Provides various options for processing and handling text from a
     Wikipedia dump (which must minimally preprocessed to remove HTML).
     """
-    def __init__(self, path):
-        self._path = path
-        self.initialize_streams()
-
-    def initialize_streams(self):
+    def _reset_streams(self):
         '''Reset all generators that stream docs/sents/batches'''
         self.batches = self._batches()
         self.documents = self._documents()
@@ -58,33 +60,6 @@ class Wikipedia(DataHandler):
             for s in sents:
                 yield s
 
-    @property
-    def batch_filter(self):
-        return self._batch_filter
-
-    @property
-    def document_filter(self):
-        return self._document_filter
-
-    @property
-    def sentence_filter(self):
-        return self._sentence_filter
-
-    @batch_filter.setter
-    def batch_filter(self, filterfunc):
-        self.batches = filterfunc(self.batches)
-        self._batch_filter = filterfunc
-
-    @document_filter.setter
-    def document_filter(self, filterfunc):
-        self.documents = filterfunc(self.documents)
-        self._document_filter = filterfunc
-
-    @sentence_filter.setter
-    def sentence_filter(self, filterfunc):
-        self.sentences = filterfunc(self.sentences)
-        self._sentence_filter = filterfunc
-
     @staticmethod
     def preprocess(document):
         '''Perform basic preprocessing on a Wikipedia document'''
@@ -97,22 +72,18 @@ class Wikipedia(DataHandler):
 
 
 class SNLI(DataHandler):
-    '''Extracts data from the SNLI corpus'''
-    def __init__(self):
-        self.path = '/Users/peterblouw/corpora/snli_1.0/'
-        self._reset_streams()
-
-    def _stream(self, filename):
-        '''A template generator for streaming from datasets'''
-        with open(self.path + filename) as f:
-            for line in f:
-                yield json.loads(line)
-
+    """Extracts data from the SNLI corpus"""
     def _reset_streams(self, func=lambda x: x):
         '''Reset all generators that stream from datasets'''
         self.train_data = func(self._train_data())
         self.dev_data = func(self._dev_data())
         self.test_data = func(self._test_data())
+
+    def _stream(self, filename):
+        '''A template generator for streaming from datasets'''
+        with open(self._path + filename) as f:
+            for line in f:
+                yield json.loads(line)
 
     def _train_data(self):
         '''Generator that streams from training dataset'''
@@ -126,82 +97,41 @@ class SNLI(DataHandler):
         '''Generator that streams from testing dataset'''
         return self._stream('snli_1.0_test.jsonl')
 
-    @property
-    def extractor(self):
-        return self._extraction_function
-
-    @extractor.setter
-    def extractor(self, func):
-        self._reset_streams(func=func)
-        self._extractor = func
-
     def build_vocab(self):
-        train_text = self.all_text(self._train_data())
-        dev_text = self.all_text(self._dev_data())
-        test_text = self.all_text(self._test_data())
-        all_text = train_text + dev_text + test_text
+        '''Extract and build a vocab from all text in the corpus'''
+        self.extractor = self.get_text
+        text = self.train_data + self.dev_data + self.test_data
+        text = text.encode('ascii')
+        self.vocab = set(nltk.word_tokenize(text))
+        self._reset_streams()
 
-        with open('text.pickle', 'wb') as handle:
-            pickle.dump(all_text, handle)
-
-        tokens = nltk.word_tokenize(all_text)
-
-        self.vocab = sorted(list(set(tokens)))
-
-        with open('vocab.pickle', 'wb') as handle:
-            pickle.dump(self.vocab, handle)
+        with open('vocab.pickle', 'wb') as pfile:
+            pickle.dump(self.vocab, pfile)
 
     def load_vocab(self):
+        '''Load a vocab that has been previously built'''
         try:
-            with open('vocab.pickle', 'rb') as handle:
-                self.vocab = pickle.load(handle)
-            with open('text.pickle', 'rb') as handle:
-                self.text = pickle.load(handle)
+            with open('vocab.pickle', 'rb') as pfile:
+                self.vocab = pickle.load(pfile)
         except:
             print 'No vocab file found!'
 
     @staticmethod
-    def all_text(snli_stream):
+    def get_text(stream):
         acc = []
-        for snli_json in snli_stream:
-            pair = snli_json['sentence1'] + ' ' + snli_json['sentence2']
-            # pair = pair.encode('ascii', 'ignore').lower()
+        for item in stream:
+            pair = item['sentence1'] + ' ' + item['sentence2']
             acc.append(pair.lower())
-
         return ' '.join(acc)
 
+    @staticmethod
+    def get_sentences(stream):
+        for item in stream:
+            yield (item['sentence1'], item['sentence2'])
 
-if __name__ == '__main__':
-
-    if platform.system() == 'Linux':
-        corpuspath = '/home/pblouw/corpora/wikipedia'
-        cachepath = '/home/pblouw/cache/'
-    else:
-        corpuspath = '/Users/peterblouw/corpora/wikipedia'
-        cachepath = '/Users/peterblouw/cache/'
-
-    snli = SNLI()
-    snli.load_vocab()
-    # vectorizer = CountVectorizer(binary=True, vocabulary=set(snli.vocab))
-    # vectorizer.fit(snli.vocab)
-
-    snli.extractor = filters.snli_sentences
-
-    # print len(vectorizer.get_feature_names())
-    # print len(snli.vocab)
-
-    # # sentences = filters.snli_sentences(snli.dev_data)
-    # # labels = filters.snli_labels(snli.dev_data)
-
-    # import numpy as np
-
-    # for _ in range(5):
-    #     sample = next(snli.test_data)
-    #     sent = sample[1].lower()
-    #     print sent
-    #     # print [w for w in sent if str(w) in vectorizer.get_feature_names()]
-    #     x = vectorizer.transform([sent]).toarray()
-    #     print x.shape
-    #     print np.sum(x)
-    #     print vectorizer.inverse_transform(x)
-    #     # print np.where(x==1)
+    @staticmethod
+    def get_xy_pairs(stream):
+        for item in stream:
+            x = (item['sentence1'], item['sentence2'])
+            y = item['gold_label']
+            yield (x, y)
