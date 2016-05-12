@@ -1,5 +1,5 @@
 nltk
 flake8
-scipy>=0.9
+scipy >= 0.9
 numpy
-sklearn
+scikit-learn
