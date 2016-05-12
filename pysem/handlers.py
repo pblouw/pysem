@@ -182,26 +182,26 @@ if __name__ == '__main__':
 
     snli = SNLI()
     snli.load_vocab()
-    vectorizer = CountVectorizer(binary=True, vocabulary=set(snli.vocab))
-    vectorizer.fit(snli.vocab)
+    # vectorizer = CountVectorizer(binary=True, vocabulary=set(snli.vocab))
+    # vectorizer.fit(snli.vocab)
 
     snli.extractor = filters.snli_sentences
 
-    print len(vectorizer.get_feature_names())
-    print len(snli.vocab)
+    # print len(vectorizer.get_feature_names())
+    # print len(snli.vocab)
 
-    # sentences = filters.snli_sentences(snli.dev_data)
-    # labels = filters.snli_labels(snli.dev_data)
+    # # sentences = filters.snli_sentences(snli.dev_data)
+    # # labels = filters.snli_labels(snli.dev_data)
 
-    import numpy as np
+    # import numpy as np
 
-    for _ in range(5):
-        sample = next(snli.test_data)
-        sent = sample[1].lower()
-        print sent
-        # print [w for w in sent if str(w) in vectorizer.get_feature_names()]
-        x = vectorizer.transform([sent]).toarray()
-        print x.shape
-        print np.sum(x)
-        print vectorizer.inverse_transform(x)
-        # print np.where(x==1)
+    # for _ in range(5):
+    #     sample = next(snli.test_data)
+    #     sent = sample[1].lower()
+    #     print sent
+    #     # print [w for w in sent if str(w) in vectorizer.get_feature_names()]
+    #     x = vectorizer.transform([sent]).toarray()
+    #     print x.shape
+    #     print np.sum(x)
+    #     print vectorizer.inverse_transform(x)
+    #     # print np.where(x==1)
