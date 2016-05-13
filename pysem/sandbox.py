@@ -171,9 +171,3 @@ snli._reset_streams()
 
 print 'After: ', model.get_accuracy(snli)
 
-# import matplotlib.pyplot as plt
-
-
-# plt.figure()
-# plt.plot(np.arange(len(model.costs)), model.costs)
-# plt.show()
