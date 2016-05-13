@@ -91,7 +91,7 @@ class MLP(Model):
 
             # Compute gradients
             yo_grad = self.yo-self.targ_bag
-            yh_grad = np.dot(self.w2.T, yo_grad)*(self.yh*(1-self.yh))   
+            yh_grad = np.dot(self.w2.T, yo_grad)*(self.yh*(1-self.yh))
             w2_grad = np.dot(yo_grad, self.yh.T) / self.bsize
             w1a_grad = np.dot(yh_grad[1:101, :], prem_bag.T) / self.bsize
             w1b_grad = np.dot(yh_grad[101:, :], hyp_bag.T) / self.bsize
@@ -171,9 +171,9 @@ snli._reset_streams()
 
 print 'After: ', model.get_accuracy(snli)
 
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
 
-plt.figure()
-plt.plot(np.arange(len(model.costs)), model.costs)
-plt.show()
+# plt.figure()
+# plt.plot(np.arange(len(model.costs)), model.costs)
+# plt.show()
