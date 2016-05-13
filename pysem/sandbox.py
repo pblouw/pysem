@@ -170,4 +170,3 @@ model.train(snli, iters=50000, bsize=300)
 snli._reset_streams()
 
 print 'After: ', model.get_accuracy(snli)
-
