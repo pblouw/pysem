@@ -1,15 +1,22 @@
 import nltk
+import multiprocessing as mp
 
 tokenizer = nltk.load('tokenizers/punkt/english.pickle')
-stemmer = nltk.stem.snowball.SnowballStemmer('english')
+
+
+def parallelize(func, paramlist):
+    cpus = mp.cpu_count()
+    pool = mp.Pool(processes=cpus)
+    for _ in pool.map_async(func, paramlist).get():
+        pass
 
 
 def wiki_cache(params):
     '''Caches processed Wikipedia articles in a specified directory'''
-    articles, cachepath, filterfunc = params
+    articles, cachepath, preprocessor = params
     with open(cachepath, 'w') as cachefile:
         for article in articles:
-            cachefile.write(filterfunc(article))
+            cachefile.write(preprocessor(article))
 
 
 def basic_strip(article):

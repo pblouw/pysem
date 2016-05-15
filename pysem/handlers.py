@@ -4,6 +4,8 @@ import json
 import nltk
 import cPickle as pickle
 
+from mputils import parallelize, wiki_cache
+
 tokenizer = nltk.load('tokenizers/punkt/english.pickle')
 
 
@@ -59,6 +61,15 @@ class Wikipedia(DataHandler):
             sents = [s.replace('\n', '') for s in sents]
             for s in sents:
                 yield s
+
+    def write_to_cache(self, path, preprocessor, n_batches):
+        paramlist = []
+        for _ in xrange(n_batches):
+            paramlist.append((next(self.batches),
+                              path + str(_) + '.txt',
+                              preprocessor))
+
+        parallelize(wiki_cache, paramlist)
 
     @staticmethod
     def preprocess(document):
