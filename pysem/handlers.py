@@ -146,3 +146,17 @@ class SNLI(DataHandler):
             x = (item['sentence1'], item['sentence2'])
             y = item['gold_label']
             yield (x, y)
+
+    @staticmethod
+    def get_parses(stream):
+        for item in stream:
+            p1 = item['sentence1_parse']
+            p2 = item['sentence2_parse']
+            yield (p1, p2)
+
+    @staticmethod
+    def get_binary_parses(stream):
+        for item in stream:
+            p1 = item['sentence1_binary_parse']
+            p2 = item['sentence2_binary_parse']
+            yield (p1, p2)
