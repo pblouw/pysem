@@ -63,6 +63,7 @@ class Wikipedia(DataHandler):
                 yield s
 
     def write_to_cache(self, path, preprocessor, n_batches):
+        '''Write batches of preprocessed documents to cache for later use'''
         paramlist = []
         for _ in xrange(n_batches):
             paramlist.append((next(self.batches),
@@ -129,6 +130,7 @@ class SNLI(DataHandler):
 
     @staticmethod
     def get_text(stream):
+        '''Modifies datastream to extract all text in the stream'''
         acc = []
         for item in stream:
             pair = item['sentence1'] + ' ' + item['sentence2']
@@ -137,11 +139,13 @@ class SNLI(DataHandler):
 
     @staticmethod
     def get_sentences(stream):
+        '''Modifies datastream to yield sentence pairs'''
         for item in stream:
             yield (item['sentence1'], item['sentence2'])
 
     @staticmethod
     def get_xy_pairs(stream):
+        '''Modifies datastream to yield x,y pairs for model training'''
         for item in stream:
             x = (item['sentence1'], item['sentence2'])
             y = item['gold_label']
@@ -149,6 +153,7 @@ class SNLI(DataHandler):
 
     @staticmethod
     def get_parses(stream):
+        '''Modifies datastream to yield parses of sentence pairs'''
         for item in stream:
             p1 = item['sentence1_parse']
             p2 = item['sentence2_parse']
@@ -156,6 +161,7 @@ class SNLI(DataHandler):
 
     @staticmethod
     def get_binary_parses(stream):
+        '''Modifies datastream to yield binary parsies of sentence pairs'''
         for item in stream:
             p1 = item['sentence1_binary_parse']
             p2 = item['sentence2_binary_parse']
