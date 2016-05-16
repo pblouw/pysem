@@ -1,4 +1,5 @@
 import nltk
+import re
 import multiprocessing as mp
 
 tokenizer = nltk.load('tokenizers/punkt/english.pickle')
@@ -23,4 +24,13 @@ def basic_strip(article):
     '''Strips out punctuation and capitalization'''
     sen_list = tokenizer.tokenize(article)
     sen_list = [s.lower() for s in sen_list if len(s) > 5]
+    return ' '.join(sen_list)
+
+
+def max_strip(article):
+    '''Strips out all sentences with brackets, numbers, etc.'''
+    regex = re.compile(r"[0-9]|\[|\<|\(|\"|\'|\{")
+    sen_list = tokenizer.tokenize(article)
+    sen_list = [s for s in sen_list if not regex.findall(s)]
+    sen_list = [s for s in sen_list if len(s) > 7]
     return ' '.join(sen_list)
