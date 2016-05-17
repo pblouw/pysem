@@ -35,13 +35,11 @@ class Wikipedia(DataHandler):
     Wikipedia dump (which must minimally preprocessed to remove HTML).
     """
     def _reset_streams(self):
-        '''Reset all generators that stream docs/sents/batches'''
         self.batches = self._batches()
         self.articles = self._articles()
         self.sentences = self._sentences()
 
     def _batches(self):
-        '''Generator that streams batches of articles from Wikipedia'''
         for root, dirs, files in os.walk(self._path):
             for file in files:
                 with open(root + '/' + file, 'r') as f:
@@ -50,13 +48,11 @@ class Wikipedia(DataHandler):
                     yield [a for a in articles if len(a) > 0]
 
     def _articles(self):
-        '''Generator that streams single articles from Wikipedia'''
         for articles in self._batches():
             for article in articles:
                 yield articles
 
     def _sentences(self):
-        '''Generator that streams sentences from Wikipedia'''
         for article in self._articles():
             sents = tokenizer.tokenize(article)
             sents = [s.replace('\n', '') for s in sents]
@@ -64,7 +60,6 @@ class Wikipedia(DataHandler):
                 yield s
 
     def _cache_batches(self):
-        '''Generator that streams batches of articles from Wikipedia'''
         for root, dirs, files in os.walk(self._path):
             for file in files:
                 with open(root + '/' + file, 'r') as f:
@@ -72,13 +67,11 @@ class Wikipedia(DataHandler):
                     yield [a for a in articles if len(a) > 0]
 
     def _cache_articles(self):
-        '''Generator that streams single articles from Wikipedia'''
         for articles in self._cache_batches():
             for article in articles:
                 yield article
 
     def _cache_sentences(self):
-        '''Generator that streams sentences from Wikipedia'''
         for article in self._cache_articles():
             sents = tokenizer.tokenize(article)
             sents = [s.replace('\n', '') for s in sents]
@@ -107,9 +100,8 @@ class Wikipedia(DataHandler):
             for counts in apply_return_async(count_words, articles):
                 counter.update(counts)
 
-        print 'Total words processed: ', sum(counter.values())
-        print 'Total unique words: ', len(counter)
-        return counter.most_common(int(len(counter)*cutoff))
+        self.vocab = counter.most_common(int(len(counter)*cutoff))
+        return self.vocab
 
     @staticmethod
     def preprocess(document):
@@ -137,21 +129,17 @@ class SNLI(DataHandler):
         self.test_data = func(self._test_data())
 
     def _stream(self, filename):
-        '''A template generator for streaming from datasets'''
         with open(self._path + filename) as f:
             for line in f:
                 yield json.loads(line)
 
     def _train_data(self):
-        '''Generator that streams from training dataset'''
         return self._stream('snli_1.0_train.jsonl')
 
     def _dev_data(self):
-        '''Generator that streams from development dataset'''
         return self._stream('snli_1.0_dev.jsonl')
 
     def _test_data(self):
-        '''Generator that streams from testing dataset'''
         return self._stream('snli_1.0_test.jsonl')
 
     def build_vocab(self):
