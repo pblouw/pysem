@@ -11,20 +11,20 @@ def test_handler():
     wp = Wikipedia(corpus_path)
 
     assert isinstance(wp.batches, types.GeneratorType)
-    assert isinstance(wp.documents, types.GeneratorType)
+    assert isinstance(wp.articles, types.GeneratorType)
     assert isinstance(wp.sentences, types.GeneratorType)
 
     assert isinstance(next(wp.batches), list)
-    assert isinstance(next(wp.documents), str)
+    assert isinstance(next(wp.articles), str)
     assert isinstance(next(wp.sentences), str)
 
 
 def test_preprocess():
     wp = Wikipedia(corpus_path)
-    document = next(wp.documents)
+    article = next(wp.articles)
 
     pattern = re.compile(r"<.*>")
-    assert not pattern.findall(document)
+    assert not pattern.findall(article)
 
     pattern = re.compile(r"\n")
-    assert not pattern.findall(document)
+    assert not pattern.findall(article)
