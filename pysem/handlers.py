@@ -37,56 +37,56 @@ class Wikipedia(DataHandler):
     def _reset_streams(self):
         '''Reset all generators that stream docs/sents/batches'''
         self.batches = self._batches()
-        self.documents = self._documents()
+        self.articles = self._articles()
         self.sentences = self._sentences()
 
     def _batches(self):
-        '''Generator that streams batches of documents from Wikipedia'''
+        '''Generator that streams batches of articles from Wikipedia'''
         for root, dirs, files in os.walk(self._path):
             for file in files:
                 with open(root + '/' + file, 'r') as f:
-                    documents = f.read().split('</doc>')
-                    documents = [self.preprocess(d) for d in documents]
-                    yield [d for d in documents if len(d) > 0]
+                    articles = f.read().split('</doc>')
+                    articles = [self.preprocess(a) for a in articles]
+                    yield [a for a in articles if len(a) > 0]
 
-    def _documents(self):
-        '''Generator that streams single documents from Wikipedia'''
-        for docbatch in self._batches():
-            for doc in docbatch:
-                yield doc
+    def _articles(self):
+        '''Generator that streams single articles from Wikipedia'''
+        for articles in self._batches():
+            for article in articles:
+                yield articles
 
     def _sentences(self):
         '''Generator that streams sentences from Wikipedia'''
-        for doc in self._documents():
-            sents = tokenizer.tokenize(doc)
+        for article in self._articles():
+            sents = tokenizer.tokenize(article)
             sents = [s.replace('\n', '') for s in sents]
             for s in sents:
                 yield s
 
     def _cache_batches(self):
-        '''Generator that streams batches of documents from Wikipedia'''
+        '''Generator that streams batches of articles from Wikipedia'''
         for root, dirs, files in os.walk(self._path):
             for file in files:
                 with open(root + '/' + file, 'r') as f:
-                    documents = f.read().split(' DOCBREAK ')
-                    yield [d for d in documents if len(d) > 0]
+                    articles = f.read().split(' </doc> ')
+                    yield [a for a in articles if len(a) > 0]
 
-    def _cache_documents(self):
-        '''Generator that streams single documents from Wikipedia'''
-        for docbatch in self._cache_batches():
-            for doc in docbatch:
-                yield doc
+    def _cache_articles(self):
+        '''Generator that streams single articles from Wikipedia'''
+        for articles in self._cache_batches():
+            for article in articles:
+                yield article
 
     def _cache_sentences(self):
         '''Generator that streams sentences from Wikipedia'''
-        for doc in self._cache_documents():
-            sents = tokenizer.tokenize(doc)
+        for article in self._cache_articles():
+            sents = tokenizer.tokenize(article)
             sents = [s.replace('\n', '') for s in sents]
             for s in sents:
                 yield s
 
     def write_to_cache(self, path, parsefunc, n_batches, batchsize=100):
-        '''Write batches of preprocessed documents to cache for later use'''
+        '''Write batches of preprocessed articles to cache for later use'''
         for _ in xrange(n_batches):
             paramlist = []
             for __ in xrange(batchsize):
@@ -98,18 +98,18 @@ class Wikipedia(DataHandler):
     def load_from_cache(self, path):
         self._path = path
         self.batches = self._cache_batches()
-        self.documents = self._cache_documents()
+        self.articles = self._cache_articles()
         self.sentences = self._cache_sentences()
 
     def build_vocab(self, cutoff=0.5):
-        counts = Counter()
-        for docbatch in self.batches:
-            for counters in apply_return_async(count_words, docbatch):
-                counts.update(counters)
+        counter = Counter()
+        for articles in self.batches:
+            for counts in apply_return_async(count_words, articles):
+                counter.update(counts)
 
-        print 'Total words processed: ', sum(counts.values())
-        print 'Total unique words: ', len(counts)
-        return counts.most_common(int(len(counts)*cutoff))
+        print 'Total words processed: ', sum(counter.values())
+        print 'Total unique words: ', len(counter)
+        return counter.most_common(int(len(counter)*cutoff))
 
     @staticmethod
     def preprocess(document):
