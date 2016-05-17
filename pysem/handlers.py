@@ -4,7 +4,8 @@ import json
 import nltk
 import cPickle as pickle
 
-from mputils import parallelize, wiki_cache
+from collections import Counter
+from mputils import apply_async, apply_return_async, wiki_cache, count_words
 
 tokenizer = nltk.load('tokenizers/punkt/english.pickle')
 
@@ -62,22 +63,66 @@ class Wikipedia(DataHandler):
             for s in sents:
                 yield s
 
-    def write_to_cache(self, path, preprocessor, n_batches):
-        '''Write batches of preprocessed documents to cache for later use'''
-        paramlist = []
-        for _ in xrange(n_batches):
-            paramlist.append((next(self.batches),
-                              path + str(_) + '.txt',
-                              preprocessor))
+    def _cache_batches(self):
+        '''Generator that streams batches of documents from Wikipedia'''
+        for root, dirs, files in os.walk(self._path):
+            for file in files:
+                with open(root + '/' + file, 'r') as f:
+                    documents = f.read().split(' DOCBREAK ')
+                    yield [d for d in documents if len(d) > 0]
 
-        parallelize(wiki_cache, paramlist)
+    def _cache_documents(self):
+        '''Generator that streams single documents from Wikipedia'''
+        for docbatch in self._cache_batches():
+            for doc in docbatch:
+                yield doc
+
+    def _cache_sentences(self):
+        '''Generator that streams sentences from Wikipedia'''
+        for doc in self._cache_documents():
+            sents = tokenizer.tokenize(doc)
+            sents = [s.replace('\n', '') for s in sents]
+            for s in sents:
+                yield s
+
+    def write_to_cache(self, path, parsefunc, n_batches, batchsize=100):
+        '''Write batches of preprocessed documents to cache for later use'''
+        for _ in xrange(n_batches):
+            paramlist = []
+            for __ in xrange(batchsize):
+                fname = str(_) + str(__) + '.txt'
+                paramlist.append((next(self.batches), path+fname, parsefunc))
+
+            apply_async(wiki_cache, paramlist)
+
+    def load_from_cache(self, path):
+        self._path = path
+        self.batches = self._cache_batches()
+        self.documents = self._cache_documents()
+        self.sentences = self._cache_sentences()
+
+    def build_vocab(self, cutoff=0.5):
+        counts = Counter()
+        for docbatch in self.batches:
+            for counters in apply_return_async(count_words, docbatch):
+                counts.update(counters)
+
+        print 'Total words processed: ', sum(counts.values())
+        print 'Total unique words: ', len(counts)
+        return counts.most_common(int(len(counts)*cutoff))
 
     @staticmethod
     def preprocess(document):
         '''Perform basic preprocessing on a Wikipedia document'''
         document = re.sub("<.*>|<|>", "", document)
-        document = document.decode('utf-8')
-        document = document.encode('ascii', 'ignore')
+
+        try:
+            document = document.decode('unicode-escape')
+            document = document.encode('ascii', 'ignore')
+        except UnicodeDecodeError:
+            print 'UnicodeDecodeError'
+            return str()
+
         document = document.split('\n')[3:]
         document = ' '.join(document)
         return document
