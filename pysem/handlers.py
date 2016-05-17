@@ -50,7 +50,7 @@ class Wikipedia(DataHandler):
     def _articles(self):
         for articles in self._batches():
             for article in articles:
-                yield articles
+                yield article
 
     def _sentences(self):
         for article in self._articles():
