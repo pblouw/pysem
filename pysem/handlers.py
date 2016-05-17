@@ -86,7 +86,7 @@ class Wikipedia(DataHandler):
                 fname = str(_) + str(__) + '.txt'
                 paramlist.append((next(self.batches), path+fname, parsefunc))
 
-            result = apply_async(wiki_cache, paramlist)
+            apply_async(wiki_cache, paramlist)
 
     def load_from_cache(self, path):
         self._path = path

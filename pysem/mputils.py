@@ -10,7 +10,7 @@ tokenizer = nltk.load('tokenizers/punkt/english.pickle')
 def apply_async(func, paramlist):
     acc = []
     cpus = mp.cpu_count()
-    pool = mp.Pool(processes=2)
+    pool = mp.Pool(processes=cpus)
     for result in pool.map_async(func, paramlist).get():
         acc.append(result)
     pool.close()
