@@ -5,7 +5,7 @@ import nltk
 import cPickle as pickle
 
 from collections import Counter
-from mputils import apply_async, apply_return_async, wiki_cache, count_words
+from mputils import apply_async, wiki_cache, count_words
 
 tokenizer = nltk.load('tokenizers/punkt/english.pickle')
 
@@ -86,7 +86,7 @@ class Wikipedia(DataHandler):
                 fname = str(_) + str(__) + '.txt'
                 paramlist.append((next(self.batches), path+fname, parsefunc))
 
-            apply_async(wiki_cache, paramlist)
+            result = apply_async(wiki_cache, paramlist)
 
     def load_from_cache(self, path):
         self._path = path
@@ -97,7 +97,7 @@ class Wikipedia(DataHandler):
     def build_vocab(self, cutoff=0.5):
         counter = Counter()
         for articles in self.batches:
-            for counts in apply_return_async(count_words, articles):
+            for counts in apply_async(count_words, articles):
                 counter.update(counts)
 
         self.vocab = counter.most_common(int(len(counter)*cutoff))

@@ -8,20 +8,13 @@ tokenizer = nltk.load('tokenizers/punkt/english.pickle')
 
 
 def apply_async(func, paramlist):
+    acc = []
     cpus = mp.cpu_count()
-    pool = mp.Pool(processes=cpus)
-    for _ in pool.map_async(func, paramlist).get():
-        pass
-
-
-def apply_return_async(func, paramlist):
-    collect = []
-    cpus = mp.cpu_count()
-    pool = mp.Pool(processes=cpus)
-    for _ in pool.map_async(func, paramlist).get():
-        collect.append(_)
+    pool = mp.Pool(processes=2)
+    for result in pool.map_async(func, paramlist).get():
+        acc.append(result)
     pool.close()
-    return collect
+    return acc
 
 
 def flatten(lst):
