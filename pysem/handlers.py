@@ -16,8 +16,20 @@ class DataHandler(object):
         self._path = path
         self._reset_streams()
 
-    def _reset_stream(self):
-        raise Exception('DataHandlers must immplement a reset method')
+    def _reset_streams(self):
+        raise Exception('DataHandlers must implement a reset method')
+
+    def save_vocab(self, filename):
+        with open(filename + '.pickle', 'wb') as pfile:
+            pickle.dump(self.vocab, pfile)
+
+    def load_vocab(self, filename):
+        '''Load a vocab that has been previously built'''
+        try:
+            with open(filename + '.pickle', 'rb') as pfile:
+                self.vocab = pickle.load(pfile)
+        except:
+            print 'No vocab file with that name was found!'
 
     @property
     def extractor(self):
@@ -101,7 +113,8 @@ class Wikipedia(DataHandler):
                 counter.update(counts)
 
         self.vocab = counter.most_common(int(len(counter)*cutoff))
-        return self.vocab
+        self.vocab = sorted([pair[0] for pair in self.vocab])
+        self._reset_streams()
 
     @staticmethod
     def preprocess(document):
@@ -149,17 +162,6 @@ class SNLI(DataHandler):
         text = text.encode('ascii')
         self.vocab = set(nltk.word_tokenize(text))
         self._reset_streams()
-
-        with open('vocab.pickle', 'wb') as pfile:
-            pickle.dump(self.vocab, pfile)
-
-    def load_vocab(self):
-        '''Load a vocab that has been previously built'''
-        try:
-            with open('vocab.pickle', 'rb') as pfile:
-                self.vocab = pickle.load(pfile)
-        except:
-            print 'No vocab file found!'
 
     @staticmethod
     def get_text(stream):
