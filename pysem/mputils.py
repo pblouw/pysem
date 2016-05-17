@@ -2,7 +2,9 @@ import nltk
 import re
 import string
 import collections
+
 import multiprocessing as mp
+import numpy as np
 
 tokenizer = nltk.load('tokenizers/punkt/english.pickle')
 
@@ -64,3 +66,24 @@ def count_words(article):
         counts.update(sen)
 
     return counts
+
+
+def build_context_vectors(params):
+    article, dimensions, base_vectors = params
+
+    sen_list = tokenizer.tokenize(article)
+    sen_list = [s.replace('\n', ' ') for s in sen_list]
+    sen_list = [s.translate(None, string.punctuation) for s in sen_list]
+    sen_list = [s.translate(None, '1234567890') for s in sen_list]
+    sen_list = [s.lower() for s in sen_list if len(s) > 5]
+    sen_list = [nltk.word_tokenize(s) for s in sen_list]
+    sen_list = [[w for w in s if w in base_vectors.keys()] for s in sen_list]
+
+    vectors = {key: np.zeros(dimensions) for key in base_vectors.keys()}
+    for sen in sen_list:
+        sen_sum = sum([base_vectors[word] for word in sen])
+        for word in sen:
+            word_sum = sen_sum - base_vectors[word]
+            vectors[word] += word_sum
+
+    return vectors
