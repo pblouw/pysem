@@ -160,7 +160,6 @@ class SNLI(DataHandler):
         '''Extract and build a vocab from all text in the corpus'''
         self.extractor = self.get_text
         text = self.train_data + self.dev_data + self.test_data
-        text = text.encode('ascii')
         self.vocab = set(nltk.word_tokenize(text))
         self._reset_streams()
 

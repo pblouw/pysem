@@ -99,7 +99,7 @@ class RandomIndexing(EmbeddingModel):
                 for r in result.get():
                     for i, j in r.items():
                         w_vecs[trainglobals.vocab_dict[i], :] += j
-
+                pool.close()
                 articles = []
 
         for word in trainglobals.vocab:

@@ -81,7 +81,7 @@ class MLP(Model):
             # Turn batches into arrays
             prems = [s[0][0] for s in batch]
             hyps = [s[0][1] for s in batch]
-            targs = [s[1].encode('ascii') for s in batch]
+            targs = [s[1] for s in batch]
 
             prem_bag = BoW.transform(prems).toarray().T
             prem_bag = np.vstack((np.ones(self.bsize), prem_bag))
@@ -130,7 +130,7 @@ class MLP(Model):
 
             prems = [s[0][0] for s in data]
             hyps = [s[0][1] for s in data]
-            targs = [s[1].encode('ascii') for s in data]
+            targs = [s[1] for s in data]
 
             prem_bag = BoW.transform(prems).toarray().T
             prem_bag = np.vstack((np.ones(len(data)), prem_bag))
@@ -192,15 +192,15 @@ else:
     cachepath = '/Users/peterblouw/cache/'
 
 snli = SNLI(snlipath)
-snli.load_vocab()
+snli.build_vocab()
 
 BoW = CountVectorizer(binary=True)
 BoW.fit(snli.vocab)
 
-model = MLP(2*len(BoW.get_feature_names()), 400, 3)
+model = MLP(2*len(BoW.get_feature_names()), 800, 3)
 print('Dev Set Accuracy Before: ', model.get_accuracy(snli, 'dev'))
 
-model.train(snli, iters=25000, bsize=600)
+model.train(snli, iters=35000, bsize=500)
 
 print('Train Set Accuracy After: ', model.get_accuracy(snli, 'train'))
 print('Dev Set Accuracy After: ', model.get_accuracy(snli, 'dev'))
