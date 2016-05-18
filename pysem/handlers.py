@@ -2,11 +2,11 @@ import os
 import re
 import json
 import nltk
-import cPickle as pickle
+import pickle
 import numpy as np
 
 from collections import Counter
-from mputils import apply_async, wiki_cache, count_words
+from .mputils import apply_async, wiki_cache, count_words
 
 tokenizer = nltk.load('tokenizers/punkt/english.pickle')
 
@@ -30,7 +30,7 @@ class DataHandler(object):
             with open(filename + '.pickle', 'rb') as pfile:
                 self.vocab = pickle.load(pfile)
         except:
-            print 'No vocab file with that name was found!'
+            print('No vocab file with that name was found!')
 
     @property
     def extractor(self):
@@ -52,9 +52,9 @@ class Wikipedia(DataHandler):
         self.article_limit = article_limit if article_limit else np.inf
         self.from_cache = from_cache
         self._reset_streams()
-        self._article_count = 0
 
     def _reset_streams(self):
+        self.article_count = 0
         self.batches = self._batches()
         self.articles = self._articles()
         self.sentences = self._sentences()
@@ -62,8 +62,10 @@ class Wikipedia(DataHandler):
     def _batches(self):
         for root, dirs, files in os.walk(self.path):
             for fname in files:
-                with open(root + '/' + fname, 'r') as f:
+                fpath = root + '/' + fname
+                with open(fpath, 'r', encoding='ascii', errors='ignore') as f:
                     articles = f.read().split('</doc>')
+
                     if not self.from_cache:
                         articles = [self.preprocess(a) for a in articles]
 
@@ -72,11 +74,11 @@ class Wikipedia(DataHandler):
     def _articles(self):
         for articles in self._batches():
             for article in articles:
-                if self._article_count >= self.article_limit:
-                    raise StopIteration()
                 yield article
 
-                self._article_count += 1
+                self.article_count += 1
+                if self.article_count > self.article_limit:
+                    raise StopIteration()
 
     def _sentences(self):
         for article in self._articles():
@@ -85,23 +87,22 @@ class Wikipedia(DataHandler):
             for s in sents:
                 yield s
 
-    def write_to_cache(self, path, parsefunc, batchsize=10):
+    def write_to_cache(self, path, processor, n_per_file=200, pool_size=10):
         '''Write batches of preprocessed articles to cache for later use'''
         paramlist = []
-        articles = []
+        batch = []
         count = 0
 
         for article in self.articles:
-            articles.append(article)
+            batch.append(article)
 
-            if len(articles) == 200:
+            if len(batch) == n_per_file:
                 fname = str(count) + '.txt'
-                params = (articles, path + fname, parsefunc)
-                paramlist.append(params)
-                articles = []
+                paramlist.append((batch, path + fname, processor))
+                batch = []
                 count += 1
 
-            if len(paramlist) == batchsize:
+            if len(paramlist) == pool_size:
                 apply_async(wiki_cache, paramlist)
                 paramlist = []
 
@@ -115,7 +116,6 @@ class Wikipedia(DataHandler):
         articles = []
         for article in self.articles:
             articles.append(article)
-            print len(articles)
             if len(articles) == batchsize:
                 for counts in apply_async(count_words, articles):
                     counter.update(counts)
@@ -129,14 +129,6 @@ class Wikipedia(DataHandler):
     def preprocess(document):
         '''Perform basic preprocessing on a Wikipedia document'''
         document = re.sub("<.*>|<|>", "", document)
-
-        try:
-            document = document.decode('unicode_escape')
-            document = document.encode('ascii', 'ignore')
-        except UnicodeDecodeError:
-            print 'UnicodeDecodeError'
-            return str()
-
         document = document.split('\n')[3:]
         document = ' '.join(document)
         return document
