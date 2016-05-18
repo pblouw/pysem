@@ -35,7 +35,7 @@ def wiki_cache(params):
     articles, cachepath, preprocessor = params
     with open(cachepath, 'w') as cachefile:
         for article in articles:
-            cachefile.write(preprocessor(article) + ' </doc> ')
+            cachefile.write(preprocessor(article) + '</doc>')
 
 
 def basic_strip(article):

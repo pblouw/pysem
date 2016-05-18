@@ -3,6 +3,7 @@ import re
 import json
 import nltk
 import cPickle as pickle
+import numpy as np
 
 from collections import Counter
 from mputils import apply_async, wiki_cache, count_words
@@ -13,7 +14,7 @@ tokenizer = nltk.load('tokenizers/punkt/english.pickle')
 class DataHandler(object):
     """Base class for handling datasets"""
     def __init__(self, path):
-        self._path = path
+        self.path = path
         self._reset_streams()
 
     def _reset_streams(self):
@@ -46,23 +47,36 @@ class Wikipedia(DataHandler):
     Provides various options for processing and handling text from a
     Wikipedia dump (which must minimally preprocessed to remove HTML).
     """
+    def __init__(self, path, article_limit=None, from_cache=False):
+        self.path = path
+        self.article_limit = article_limit if article_limit else np.inf
+        self.from_cache = from_cache
+        self._reset_streams()
+        self._article_count = 0
+
     def _reset_streams(self):
         self.batches = self._batches()
         self.articles = self._articles()
         self.sentences = self._sentences()
 
     def _batches(self):
-        for root, dirs, files in os.walk(self._path):
-            for file in files:
-                with open(root + '/' + file, 'r') as f:
+        for root, dirs, files in os.walk(self.path):
+            for fname in files:
+                with open(root + '/' + fname, 'r') as f:
                     articles = f.read().split('</doc>')
-                    articles = [self.preprocess(a) for a in articles]
+                    if not self.from_cache:
+                        articles = [self.preprocess(a) for a in articles]
+
                     yield [a for a in articles if len(a) > 0]
 
     def _articles(self):
         for articles in self._batches():
             for article in articles:
+                if self._article_count >= self.article_limit:
+                    raise StopIteration()
                 yield article
+
+                self._article_count += 1
 
     def _sentences(self):
         for article in self._articles():
@@ -71,46 +85,41 @@ class Wikipedia(DataHandler):
             for s in sents:
                 yield s
 
-    def _cache_batches(self):
-        for root, dirs, files in os.walk(self._path):
-            for file in files:
-                with open(root + '/' + file, 'r') as f:
-                    articles = f.read().split(' </doc> ')
-                    yield [a for a in articles if len(a) > 0]
-
-    def _cache_articles(self):
-        for articles in self._cache_batches():
-            for article in articles:
-                yield article
-
-    def _cache_sentences(self):
-        for article in self._cache_articles():
-            sents = tokenizer.tokenize(article)
-            sents = [s.replace('\n', '') for s in sents]
-            for s in sents:
-                yield s
-
-    def write_to_cache(self, path, parsefunc, n_batches, batchsize=100):
+    def write_to_cache(self, path, parsefunc, batchsize=10):
         '''Write batches of preprocessed articles to cache for later use'''
-        for _ in xrange(n_batches):
-            paramlist = []
-            for __ in xrange(batchsize):
-                fname = str(_) + str(__) + '.txt'
-                paramlist.append((next(self.batches), path+fname, parsefunc))
+        paramlist = []
+        articles = []
+        count = 0
 
+        for article in self.articles:
+            articles.append(article)
+
+            if len(articles) == 200:
+                fname = str(count) + '.txt'
+                params = (articles, path + fname, parsefunc)
+                paramlist.append(params)
+                articles = []
+                count += 1
+
+            if len(paramlist) == batchsize:
+                apply_async(wiki_cache, paramlist)
+                paramlist = []
+
+        if len(paramlist) != 0:
             apply_async(wiki_cache, paramlist)
 
-    def load_from_cache(self, path):
-        self._path = path
-        self.batches = self._cache_batches()
-        self.articles = self._cache_articles()
-        self.sentences = self._cache_sentences()
+        self._reset_streams()
 
-    def build_vocab(self, cutoff=0.5):
+    def build_vocab(self, cutoff=0.5, batchsize=100):
         counter = Counter()
-        for articles in self.batches:
-            for counts in apply_async(count_words, articles):
-                counter.update(counts)
+        articles = []
+        for article in self.articles:
+            articles.append(article)
+            print len(articles)
+            if len(articles) == batchsize:
+                for counts in apply_async(count_words, articles):
+                    counter.update(counts)
+                articles = []
 
         self.vocab = counter.most_common(int(len(counter)*cutoff))
         self.vocab = sorted([pair[0] for pair in self.vocab])
@@ -122,7 +131,7 @@ class Wikipedia(DataHandler):
         document = re.sub("<.*>|<|>", "", document)
 
         try:
-            document = document.decode('unicode-escape')
+            document = document.decode('unicode_escape')
             document = document.encode('ascii', 'ignore')
         except UnicodeDecodeError:
             print 'UnicodeDecodeError'
@@ -142,7 +151,7 @@ class SNLI(DataHandler):
         self.test_data = func(self._test_data())
 
     def _stream(self, filename):
-        with open(self._path + filename) as f:
+        with open(self.path + filename) as f:
             for line in f:
                 yield json.loads(line)
 
