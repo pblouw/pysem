@@ -5,12 +5,7 @@ import collections
 
 import multiprocessing as mp
 
-# from nltk.stem.snowball import SnowballStemmer
-
-
 tokenizer = nltk.load('tokenizers/punkt/english.pickle')
-stopwords = nltk.corpus.stopwords.words('english')
-# stemmer = SnowballStemmer('english')
 
 punc_translator = str.maketrans({key: None for key in string.punctuation})
 num_translator = str.maketrans({key: None for key in '1234567890'})
