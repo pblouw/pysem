@@ -62,14 +62,14 @@ class MLP(Model):
         for _ in range(iters):
 
             if _ % 1000 == 0:
-                print _
+                print(_)
 
             if _ == 0.7 * iters:
                 rate = 0.15
-                print 'Dropped rate to ', rate
+                print('Dropped rate to ', rate)
             if _ == 0.95 * iters:
                 rate = 0.075
-                print 'Dropped rate to ', rate
+                print('Dropped rate to ', rate)
 
             batch = random.sample(data, self.bsize)
 
@@ -130,7 +130,6 @@ class MLP(Model):
         hyp_bag = np.vstack((np.ones(len(data)), hyp_bag))
 
         targs = self.binarize(targs)
-        print targs.shape
 
         correct = sum(np.equal(self.predict(prem_bag, hyp_bag),
                       np.argmax(targs, axis=0)))
@@ -163,10 +162,10 @@ BoW = CountVectorizer(binary=True)
 BoW.fit(snli.vocab)
 
 model = MLP(len(BoW.get_feature_names()), 200, 3)
-print 'Before: ', model.get_accuracy(snli)
+print('Before: ', model.get_accuracy(snli))
 snli._reset_streams()
 
 model.train(snli, iters=50000, bsize=300)
 snli._reset_streams()
 
-print 'After: ', model.get_accuracy(snli)
+print('After: ', model.get_accuracy(snli))
