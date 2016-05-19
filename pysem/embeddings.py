@@ -23,11 +23,6 @@ class EmbeddingModel(object):
     def __init__(self):
         pass
 
-    @staticmethod
-    def normalize(v):
-        if np.linalg.norm(v) > 0:
-            return v / np.linalg.norm(v)
-
 
 class RandomIndexing(EmbeddingModel):
 
@@ -35,7 +30,7 @@ class RandomIndexing(EmbeddingModel):
         self._corpus = corpus
 
     @staticmethod
-    def build_order_vectors(article):
+    def build_vectors(article):
         sen_list = tokenizer.tokenize(article)
         sen_list = [s.replace('\n', ' ') for s in sen_list]
         sen_list = [s.translate(punc_translator) for s in sen_list]
@@ -44,7 +39,8 @@ class RandomIndexing(EmbeddingModel):
         sen_list = [nltk.word_tokenize(s) for s in sen_list]
         sen_list = [[w.lower() for w in s] for s in sen_list]
         sen_list = [[w for w in s if w in glb.vocab] for s in sen_list]
-        vec_dict = dict()
+        ord_dict = dict()
+
         maxn = 5
         for sen in sen_list:
             pos = 0
@@ -62,28 +58,16 @@ class RandomIndexing(EmbeddingModel):
 
                 word = sen[x]
                 try:
-                    vec_dict[word] += o_sum
+                    ord_dict[word] += o_sum
                 except KeyError:
-                    vec_dict[word] = o_sum
+                    ord_dict[word] = o_sum
                 pos += 1
 
-        return vec_dict
-
-    @staticmethod
-    def build_context_vectors(article):
-        sen_list = tokenizer.tokenize(article)
-        sen_list = [s.replace('\n', ' ') for s in sen_list]
-        sen_list = [s.translate(punc_translator) for s in sen_list]
-        sen_list = [s.translate(num_translator) for s in sen_list]
-        sen_list = [s.lower() for s in sen_list if len(s) > 5]
-        sen_list = [nltk.word_tokenize(s) for s in sen_list]
-        sen_list = [[w.lower() for w in s] for s in sen_list]
-        sen_list = [[w for w in s if w in glb.vocab] for s in sen_list]
-        vec_dict = dict()
+        con_dict = dict()
 
         for sen in sen_list:
             sen_sum = sum([glb.base_vectors[glb.word_to_idx[w], :]
-                           for w in sen])
+                           for w in sen if w not in stopwords])
             for word in sen:
                 w_index = glb.word_to_idx[word]
                 w_sum = sen_sum - glb.base_vectors[w_index, :]
@@ -91,10 +75,11 @@ class RandomIndexing(EmbeddingModel):
                     continue
                 else:
                     try:
-                        vec_dict[word] += w_sum
+                        con_dict[word] += w_sum
                     except KeyError:
-                        vec_dict[word] = w_sum
-        return vec_dict
+                        con_dict[word] = w_sum
+
+        return (con_dict, ord_dict)
 
     def get_synonyms(self, word):
         probe = self.context_vectors[glb.word_to_idx[word], :]
@@ -108,11 +93,11 @@ class RandomIndexing(EmbeddingModel):
         for word in top_words[:5]:
             print(word[0], word[1])
 
-    def train(self, dim, vocab, batchsize=200):
+    def train(self, dim, vocab, batchsize=500):
         self.dim = dim
 
         glb.dim = dim
-        glb.vocab = {w for w in vocab if w not in stopwords}
+        glb.vocab = vocab
 
         glb.word_to_idx = {word: idx for idx, word in enumerate(glb.vocab)}
         glb.idx_to_word = {idx: word for word, idx in glb.word_to_idx.items()}
@@ -131,20 +116,20 @@ class RandomIndexing(EmbeddingModel):
         batch = []
         for article in self._corpus.articles:
             batch.append(article)
-            if len(batch) == batchsize:
+            if len(batch) % batchsize == 0 and len(batch) > 0:
+                print('BATCH RUNNING!')
                 cpus = mp.cpu_count()
                 pool = mp.Pool(processes=cpus)
-                result = pool.map_async(self.build_context_vectors, batch)
+                result = pool.map_async(self.build_vectors, batch)
                 for r in result.get():
-                    for i, j in r.items():
-                        self.context_vectors[glb.word_to_idx[i], :] += j
-                pool.close()
-
-                o_pool = mp.Pool(processes=cpus)
-                result = o_pool.map_async(self.build_order_vectors, batch)
-                for r in result.get():
-                    for i, j in r.items():
+                    context = r[0]
+                    order = r[1]
+                    for i, j in order.items():
                         self.order_vectors[glb.word_to_idx[i], :] += j
+
+                    for k, l in context.items():
+                        self.context_vectors[glb.word_to_idx[k], :] += l
+
                 pool.close()
                 batch = []
 
@@ -152,6 +137,8 @@ class RandomIndexing(EmbeddingModel):
             w_index = glb.word_to_idx[word]
             if np.all(self.context_vectors[w_index, :] == 0):
                 self.context_vectors[w_index, :] = glb.base_vectors[w_index, :]
+            if np.all(self.order_vectors[w_index, :] == 0):
+                self.order_vectors[w_index, :] = glb.base_vectors[w_index, :]
 
         norms = np.linalg.norm(self.context_vectors, axis=1)
         self.context_vectors = np.divide(self.context_vectors,
@@ -168,9 +155,6 @@ class RandomIndexing(EmbeddingModel):
         if position < 0:
             probe = glb.deconvolve(glb.neg_i[abs(position+1)], v)
         self.rank_words(np.dot(glb.base_vectors, probe))
-
-    def unit_vector(self):
-        return self.normalize(np.random.normal(loc=0, size=1))
 
     def unitary_vector(self):
         v = np.random.normal(loc=0, scale=(1/(self.dim**0.5)), size=self.dim)
