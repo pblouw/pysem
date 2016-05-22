@@ -1,21 +1,32 @@
 import nltk
 import string
 import operator
+import spacy
 
 import numpy as np
 import multiprocessing as mp
 
-from nltk.stem.snowball import SnowballStemmer
-from .mputils import Container
+from mputils import Container
 
 tokenizer = nltk.load('tokenizers/punkt/english.pickle')
 stopwords = nltk.corpus.stopwords.words('english')
-stemmer = SnowballStemmer('english')
 
 glb = Container()
 
 punc_translator = str.maketrans({key: None for key in string.punctuation})
 num_translator = str.maketrans({key: None for key in string.digits})
+
+nlp = spacy.load('en')
+
+deps = dict()
+deps['NOUN'] = set(['det', 'prep', 'amod', 'poss', 'pobj', 'dobj', 'nsubj',
+                    'compound'])
+deps['VERB'] = set(['nsubj', 'dobj'])
+deps['ADV'] = set(['advmod'])
+deps['ADJ'] = set(['conj', 'nsubj', 'det', 'compound', 'amod', 'pobj', 'dobj',
+                   'nsubjpass'])
+deps['DET'] = set(['det', 'compound', 'advmod', 'pobj', 'dep', 'ROOT', 'dobj',
+                   'mark'])
 
 
 class EmbeddingModel(object):
@@ -28,6 +39,39 @@ class RandomIndexing(EmbeddingModel):
 
     def __init__(self, corpus):
         self._corpus = corpus
+
+    @staticmethod
+    def build_syntax(article):
+        doc = nlp(article)
+        syn_dict = dict()
+
+        for sent in doc.sents:
+            for token in sent:
+                word = token.orth_.lower()
+                if word in glb.vocab:
+                    pos = token.pos_
+
+                    children = [c for c in token.children]
+                    for c in children:
+                        dep = c.dep_
+
+                        if pos == 'VERB' and dep in glb.verb_deps:
+                            print(c.orth_, dep, word)
+                            role = glb.verb_deps[dep]
+
+                        if c.orth_ in glb.vocab and c.orth_ not in stopwords:
+                            try:
+                                filler = glb.base_vectors[glb.word_to_idx[
+                                                          c.orth_.lower()], :]
+                                binding = glb.convolve(role, filler)
+                                try:
+                                    syn_dict[word] += binding
+                                except KeyError:
+                                    syn_dict[word] = binding
+                            except:
+                                pass
+
+        return syn_dict
 
     @staticmethod
     def build_vectors(article):
@@ -107,11 +151,18 @@ class RandomIndexing(EmbeddingModel):
 
         self.context_vectors = np.zeros((len(glb.vocab), self.dim))
         self.order_vectors = np.zeros((len(glb.vocab), self.dim))
+        self.dep_vectors = np.zeros((len(glb.vocab), self.dim))
 
         glb.pos_i = [self.unitary_vector() for i in range(5)]
         glb.neg_i = [self.unitary_vector() for i in range(5)]
         glb.pos_i = dict((i, j) for i, j in enumerate(glb.pos_i))
         glb.neg_i = dict((i, j) for i, j in enumerate(glb.neg_i))
+
+        glb.noun_deps = {d: self.unitary_vector() for d in deps['NOUN']}
+        glb.verb_deps = {d: self.unitary_vector() for d in deps['VERB']}
+        glb.adv_deps = {d: self.unitary_vector() for d in deps['ADV']}
+        glb.adj_deps = {d: self.unitary_vector() for d in deps['ADJ']}
+        glb.det_deps = {d: self.unitary_vector() for d in deps['DET']}
 
         batch = []
         for article in self._corpus.articles:
@@ -124,12 +175,19 @@ class RandomIndexing(EmbeddingModel):
                 for r in result.get():
                     context = r[0]
                     order = r[1]
+
                     for i, j in order.items():
                         self.order_vectors[glb.word_to_idx[i], :] += j
 
-                    for k, l in context.items():
-                        self.context_vectors[glb.word_to_idx[k], :] += l
+                    for i, j in context.items():
+                        self.context_vectors[glb.word_to_idx[i], :] += j
 
+                pool.close()
+                pool = mp.Pool(processes=cpus)
+                result = pool.map_async(self.build_syntax, batch)
+                for r in result.get():
+                    for i, j in r.items():
+                        self.dep_vectors[glb.word_to_idx[i], :] += j
                 pool.close()
                 batch = []
 
@@ -139,6 +197,8 @@ class RandomIndexing(EmbeddingModel):
                 self.context_vectors[w_index, :] = glb.base_vectors[w_index, :]
             if np.all(self.order_vectors[w_index, :] == 0):
                 self.order_vectors[w_index, :] = glb.base_vectors[w_index, :]
+            if np.all(self.dep_vectors[w_index, :] == 0):
+                self.dep_vectors[w_index, :] = glb.base_vectors[w_index, :]
 
         norms = np.linalg.norm(self.context_vectors, axis=1)
         self.context_vectors = np.divide(self.context_vectors,
@@ -148,12 +208,21 @@ class RandomIndexing(EmbeddingModel):
         self.order_vectors = np.divide(self.order_vectors,
                                        norms[:, np.newaxis])
 
+        norms = np.linalg.norm(self.dep_vectors, axis=1)
+        self.dep_vectors = np.divide(self.dep_vectors,
+                                     norms[:, np.newaxis])
+
     def get_completions(self, word, position):
         v = self.order_vectors[glb.word_to_idx[word], :]
         if position > 0:
             probe = glb.deconvolve(glb.pos_i[position-1], v)
         if position < 0:
             probe = glb.deconvolve(glb.neg_i[abs(position+1)], v)
+        self.rank_words(np.dot(glb.base_vectors, probe))
+
+    def get_verb_neighbor(self, word, dep):
+        v = self.dep_vectors[glb.word_to_idx[word], :]
+        probe = glb.deconvolve(glb.verb_deps[dep], v)
         self.rank_words(np.dot(glb.base_vectors, probe))
 
     def unitary_vector(self):
