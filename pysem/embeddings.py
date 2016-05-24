@@ -36,7 +36,7 @@ class RandomIndexing(EmbeddingModel):
         self._corpus = corpus
 
     @staticmethod
-    def encode(article):
+    def preprocess(article):
         sen_list = tokenizer.tokenize(article)
         sen_list = [s.replace('\n', ' ') for s in sen_list]
         sen_list = [s.translate(shared.strip_num) for s in sen_list]
@@ -44,17 +44,26 @@ class RandomIndexing(EmbeddingModel):
         sen_list = [s.lower() for s in sen_list if len(s) > 5]
         sen_list = [nltk.word_tokenize(s) for s in sen_list]
         sen_list = [[w for w in s if w in shared.wordlist] for s in sen_list]
+        return sen_list
 
-        ord_dict = defaultdict(zeros)
-        con_dict = defaultdict(zeros)
-
-        maxn = 5
+    @staticmethod
+    def encode_context(sen_list):
+        encodings = defaultdict(zeros)
         for sen in sen_list:
             sen_sum = sum([shared[w].v for w in sen if w not in stopwords])
+            for word in sen:
+                word_sum = sen_sum - shared[word].v
+                encodings[word] += word_sum
+        return encodings
 
+    @staticmethod
+    def encode_order(sen_list):
+        encodings = defaultdict(zeros)
+        win = 5
+        for sen in sen_list:
             for x in range(len(sen)):
-                o_sum = HRR(np.zeros(shared.dimensions))
-                for y in range(maxn):
+                o_sum = HRR(zeros())
+                for y in range(win):
                     if x+y+1 < len(sen):
                         w = shared[sen[x+y+1]]
                         p = HRR(shared.pos_i[y])
@@ -63,17 +72,11 @@ class RandomIndexing(EmbeddingModel):
                         w = shared[sen[x-y-1]]
                         p = HRR(shared.neg_i[y])
                         o_sum += w * p
-
-                word = sen[x]
-                w_sum = sen_sum - shared[word].v
-
-                ord_dict[word] += o_sum.v
-                con_dict[word] += w_sum
-
-        return (con_dict, ord_dict)
+                encodings[sen[x]] += o_sum.v
+        return encodings
 
     @staticmethod
-    def syntax(article):
+    def encode_syntax(article):
         doc = nlp(article)
         syn_dict = dict()
 
@@ -145,8 +148,11 @@ class RandomIndexing(EmbeddingModel):
         for article in self._corpus.articles:
             batch.append(article)
             if len(batch) % batchsize == 0 and len(batch) > 0:
-                self.run_pool(self.encode, batch)
-                self.run_pool(self.syntax, batch, syntax=True)
+                test = self.pool_preprocess(self.preprocess, batch)
+                test = [b for b in test if len(b) > 1]
+                self.run_pool(self.encode_context, test, self.context_vectors)
+                self.run_pool(self.encode_order, test, self.order_vectors)
+                self.run_pool(self.encode_syntax, batch, self.dep_vectors)
                 batch = []
 
         for word in shared.wordlist:
@@ -170,23 +176,20 @@ class RandomIndexing(EmbeddingModel):
         self.dep_vectors = np.divide(self.dep_vectors,
                                      norms[:, np.newaxis])
 
-    def run_pool(self, function, batch, syntax=False):
+    def pool_preprocess(self, function, batch):
+        acc = []
         with mp.Pool(processes=self.cpus) as pool:
             result = pool.map_async(function, batch)
             for r in result.get():
-                if syntax:
-                    for i, j in r.items():
-                        self.dep_vectors[shared.word_to_index[i], :] += j
-                    continue
+                acc.append(r)
+        return acc
 
-                context = r[0]
-                order = r[1]
-
-                for i, j in order.items():
-                    self.order_vectors[shared.word_to_index[i], :] += j
-
-                for i, j in context.items():
-                    self.context_vectors[shared.word_to_index[i], :] += j
+    def run_pool(self, function, batch, encoding):
+        with mp.Pool(processes=self.cpus) as pool:
+            result = pool.map_async(function, batch)
+            for _ in result.get():
+                for word, vec in _.items():
+                    encoding[shared.word_to_index[word], :] += vec
 
 
 class SkipGram(EmbeddingModel):
