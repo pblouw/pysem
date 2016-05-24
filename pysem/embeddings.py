@@ -130,6 +130,25 @@ class RandomIndexing(EmbeddingModel):
         probe = shared.deconvolve(shared.verb_deps[dep], v)
         self.rank_words(np.dot(shared.vectors, probe))
 
+    def build_context_encodings(self):
+        pass
+
+    def build_order_encodings(self):
+        pass
+
+    def build_syntax_encodings(self):
+        pass
+
+    def normalize_encoding(self, encoding):
+        for word in shared.wordlist:
+            index = shared.word_to_index[word]
+            if np.all(encoding[index, :] == 0):
+                encoding[index, :] = shared[word].v
+
+        norms = np.linalg.norm(encoding, axis=1)
+        encoding = np.divide(encoding, norms[:, np.newaxis])
+        return encoding
+
     def train(self, dim, vocab, batchsize=500):
         self.dim = dim
         self.cpus = mp.cpu_count()
@@ -155,26 +174,9 @@ class RandomIndexing(EmbeddingModel):
                 self.run_pool(self.encode_syntax, batch, self.dep_vectors)
                 batch = []
 
-        for word in shared.wordlist:
-            w_index = shared.word_to_index[word]
-            if np.all(self.context_vectors[w_index, :] == 0):
-                self.context_vectors[w_index, :] = shared[word].v
-            if np.all(self.order_vectors[w_index, :] == 0):
-                self.order_vectors[w_index, :] = shared[word].v
-            if np.all(self.dep_vectors[w_index, :] == 0):
-                self.dep_vectors[w_index, :] = shared[word].v
-
-        norms = np.linalg.norm(self.context_vectors, axis=1)
-        self.context_vectors = np.divide(self.context_vectors,
-                                         norms[:, np.newaxis])
-
-        norms = np.linalg.norm(self.order_vectors, axis=1)
-        self.order_vectors = np.divide(self.order_vectors,
-                                       norms[:, np.newaxis])
-
-        norms = np.linalg.norm(self.dep_vectors, axis=1)
-        self.dep_vectors = np.divide(self.dep_vectors,
-                                     norms[:, np.newaxis])
+        self.context_vectors = self.normalize_encoding(self.context_vectors)
+        self.order_vectors = self.normalize_encoding(self.order_vectors)
+        self.dep_vectors = self.normalize_encoding(self.dep_vectors)
 
     def pool_preprocess(self, function, batch):
         acc = []
