@@ -6,27 +6,22 @@ import spacy
 import numpy as np
 import multiprocessing as mp
 
-from mputils import Container
+from collections import defaultdict
+from hrr import Vocabulary, HRR
 
 tokenizer = nltk.load('tokenizers/punkt/english.pickle')
 stopwords = nltk.corpus.stopwords.words('english')
 
-glb = Container()
-
-punc_translator = str.maketrans({key: None for key in string.punctuation})
-num_translator = str.maketrans({key: None for key in string.digits})
+shared = None
 
 nlp = spacy.load('en')
 
 deps = dict()
-deps['NOUN'] = set(['det', 'prep', 'amod', 'poss', 'pobj', 'dobj', 'nsubj',
-                    'compound'])
 deps['VERB'] = set(['nsubj', 'dobj'])
-deps['ADV'] = set(['advmod'])
-deps['ADJ'] = set(['conj', 'nsubj', 'det', 'compound', 'amod', 'pobj', 'dobj',
-                   'nsubjpass'])
-deps['DET'] = set(['det', 'compound', 'advmod', 'pobj', 'dep', 'ROOT', 'dobj',
-                   'mark'])
+
+
+def zeros():
+    return np.zeros(shared.dimensions)
 
 
 class EmbeddingModel(object):
@@ -41,164 +36,127 @@ class RandomIndexing(EmbeddingModel):
         self._corpus = corpus
 
     @staticmethod
-    def build_syntax(article):
+    def encode(article):
+        sen_list = tokenizer.tokenize(article)
+        sen_list = [s.replace('\n', ' ') for s in sen_list]
+        sen_list = [s.translate(shared.strip_num) for s in sen_list]
+        sen_list = [s.translate(shared.strip_pun) for s in sen_list]
+        sen_list = [s.lower() for s in sen_list if len(s) > 5]
+        sen_list = [nltk.word_tokenize(s) for s in sen_list]
+        sen_list = [[w for w in s if w in shared.wordlist] for s in sen_list]
+
+        ord_dict = defaultdict(zeros)
+        con_dict = defaultdict(zeros)
+
+        maxn = 5
+        for sen in sen_list:
+            sen_sum = sum([shared[w].v for w in sen if w not in stopwords])
+
+            for x in range(len(sen)):
+                o_sum = HRR(np.zeros(shared.dimensions))
+                for y in range(maxn):
+                    if x+y+1 < len(sen):
+                        w = shared[sen[x+y+1]]
+                        p = HRR(shared.pos_i[y])
+                        o_sum += w * p
+                    if x-y-1 >= 0:
+                        w = shared[sen[x-y-1]]
+                        p = HRR(shared.neg_i[y])
+                        o_sum += w * p
+
+                word = sen[x]
+                w_sum = sen_sum - shared[word].v
+
+                ord_dict[word] += o_sum.v
+                con_dict[word] += w_sum
+
+        return (con_dict, ord_dict)
+
+    @staticmethod
+    def syntax(article):
         doc = nlp(article)
         syn_dict = dict()
 
         for sent in doc.sents:
             for token in sent:
                 word = token.orth_.lower()
-                if word in glb.vocab:
+                if word in shared.wordlist:
                     pos = token.pos_
 
                     children = [c for c in token.children]
                     for c in children:
                         dep = c.dep_
 
-                        if pos == 'VERB' and dep in glb.verb_deps:
+                        if pos == 'VERB' and dep in shared.verb_deps:
                             print(c.orth_, dep, word)
-                            role = glb.verb_deps[dep]
-
-                        if c.orth_ in glb.vocab and c.orth_ not in stopwords:
-                            try:
-                                filler = glb.base_vectors[glb.word_to_idx[
-                                                          c.orth_.lower()], :]
-                                binding = glb.convolve(role, filler)
+                            role = shared.verb_deps[dep]
+                            orth = c.orth_.lower()
+                            if orth in shared.wordlist:
+                                filler = shared[orth].v
+                                binding = shared.convolve(role, filler)
                                 try:
                                     syn_dict[word] += binding
                                 except KeyError:
                                     syn_dict[word] = binding
-                            except:
-                                pass
 
         return syn_dict
 
-    @staticmethod
-    def build_vectors(article):
-        sen_list = tokenizer.tokenize(article)
-        sen_list = [s.replace('\n', ' ') for s in sen_list]
-        sen_list = [s.translate(punc_translator) for s in sen_list]
-        sen_list = [s.translate(num_translator) for s in sen_list]
-        sen_list = [s.lower() for s in sen_list if len(s) > 5]
-        sen_list = [nltk.word_tokenize(s) for s in sen_list]
-        sen_list = [[w.lower() for w in s] for s in sen_list]
-        sen_list = [[w for w in s if w in glb.vocab] for s in sen_list]
-        ord_dict = dict()
-
-        maxn = 5
-        for sen in sen_list:
-            pos = 0
-            for x in range(len(sen)):
-                o_sum = np.zeros(glb.dim)
-                for y in range(maxn):
-                    if pos+y+1 < len(sen):
-                        w = glb.base_vectors[glb.word_to_idx[sen[pos+y+1]], :]
-                        p = glb.pos_i[y]
-                        o_sum += glb.convolve(w, p)
-                    if pos-y-1 >= 0:
-                        w = glb.base_vectors[glb.word_to_idx[sen[pos-y-1]], :]
-                        p = glb.neg_i[y]
-                        o_sum += glb.convolve(w, p)
-
-                word = sen[x]
-                try:
-                    ord_dict[word] += o_sum
-                except KeyError:
-                    ord_dict[word] = o_sum
-                pos += 1
-
-        con_dict = dict()
-
-        for sen in sen_list:
-            sen_sum = sum([glb.base_vectors[glb.word_to_idx[w], :]
-                           for w in sen if w not in stopwords])
-            for word in sen:
-                w_index = glb.word_to_idx[word]
-                w_sum = sen_sum - glb.base_vectors[w_index, :]
-                if np.linalg.norm(w_sum) == 0.0:
-                    continue
-                else:
-                    try:
-                        con_dict[word] += w_sum
-                    except KeyError:
-                        con_dict[word] = w_sum
-
-        return (con_dict, ord_dict)
-
     def get_synonyms(self, word):
-        probe = self.context_vectors[glb.word_to_idx[word], :]
+        probe = self.context_vectors[shared.word_to_index[word], :]
         self.rank_words(np.dot(self.context_vectors, probe))
 
     def rank_words(self, comparison):
-        rank = zip(range(len(glb.vocab)), comparison)
+        rank = zip(range(len(shared.wordlist)), comparison)
         rank = sorted(rank, key=operator.itemgetter(1), reverse=True)
-        top_words = [(glb.idx_to_word[item[0]], item[1]) for item in rank[:10]]
+        top_words = [(shared.index_to_word[item[0]], item[1])
+                     for item in rank[:10]]
 
         for word in top_words[:5]:
             print(word[0], word[1])
 
+    def get_completions(self, word, position):
+        v = self.order_vectors[shared.word_to_index[word], :]
+        if position > 0:
+            probe = shared.deconvolve(shared.pos_i[position-1], v)
+        if position < 0:
+            probe = shared.deconvolve(shared.neg_i[abs(position+1)], v)
+        self.rank_words(np.dot(shared.vectors, probe))
+
+    def get_verb_neighbor(self, word, dep):
+        v = self.dep_vectors[shared.word_to_index[word], :]
+        probe = shared.deconvolve(shared.verb_deps[dep], v)
+        self.rank_words(np.dot(shared.vectors, probe))
+
     def train(self, dim, vocab, batchsize=500):
         self.dim = dim
+        self.cpus = mp.cpu_count()
 
-        glb.dim = dim
-        glb.vocab = vocab
+        global shared
+        shared = Vocabulary(dim, vocab)
+        shared.strip_pun = str.maketrans({key: None
+                                          for key in string.punctuation})
+        shared.strip_num = str.maketrans({key: None for key in string.digits})
 
-        glb.word_to_idx = {word: idx for idx, word in enumerate(glb.vocab)}
-        glb.idx_to_word = {idx: word for word, idx in glb.word_to_idx.items()}
-
-        glb.base_vectors = np.random.normal(loc=0, scale=1/(self.dim**0.5),
-                                            size=(len(glb.vocab), self.dim))
-
-        self.context_vectors = np.zeros((len(glb.vocab), self.dim))
-        self.order_vectors = np.zeros((len(glb.vocab), self.dim))
-        self.dep_vectors = np.zeros((len(glb.vocab), self.dim))
-
-        glb.pos_i = [self.unitary_vector() for i in range(5)]
-        glb.neg_i = [self.unitary_vector() for i in range(5)]
-        glb.pos_i = dict((i, j) for i, j in enumerate(glb.pos_i))
-        glb.neg_i = dict((i, j) for i, j in enumerate(glb.neg_i))
-
-        glb.noun_deps = {d: self.unitary_vector() for d in deps['NOUN']}
-        glb.verb_deps = {d: self.unitary_vector() for d in deps['VERB']}
-        glb.adv_deps = {d: self.unitary_vector() for d in deps['ADV']}
-        glb.adj_deps = {d: self.unitary_vector() for d in deps['ADJ']}
-        glb.det_deps = {d: self.unitary_vector() for d in deps['DET']}
+        self.context_vectors = np.zeros((len(vocab), self.dim))
+        self.order_vectors = np.zeros((len(vocab), self.dim))
+        self.dep_vectors = np.zeros((len(vocab), self.dim))
 
         batch = []
         for article in self._corpus.articles:
             batch.append(article)
             if len(batch) % batchsize == 0 and len(batch) > 0:
-                print('BATCH RUNNING!')
-                cpus = mp.cpu_count()
-                pool = mp.Pool(processes=cpus)
-                result = pool.map_async(self.build_vectors, batch)
-                for r in result.get():
-                    context = r[0]
-                    order = r[1]
-
-                    for i, j in order.items():
-                        self.order_vectors[glb.word_to_idx[i], :] += j
-
-                    for i, j in context.items():
-                        self.context_vectors[glb.word_to_idx[i], :] += j
-
-                pool.close()
-                pool = mp.Pool(processes=cpus)
-                result = pool.map_async(self.build_syntax, batch)
-                for r in result.get():
-                    for i, j in r.items():
-                        self.dep_vectors[glb.word_to_idx[i], :] += j
-                pool.close()
+                self.run_pool(self.encode, batch)
+                self.run_pool(self.syntax, batch, syntax=True)
                 batch = []
 
-        for word in glb.vocab:
-            w_index = glb.word_to_idx[word]
+        for word in shared.wordlist:
+            w_index = shared.word_to_index[word]
             if np.all(self.context_vectors[w_index, :] == 0):
-                self.context_vectors[w_index, :] = glb.base_vectors[w_index, :]
+                self.context_vectors[w_index, :] = shared[word].v
             if np.all(self.order_vectors[w_index, :] == 0):
-                self.order_vectors[w_index, :] = glb.base_vectors[w_index, :]
+                self.order_vectors[w_index, :] = shared[word].v
             if np.all(self.dep_vectors[w_index, :] == 0):
-                self.dep_vectors[w_index, :] = glb.base_vectors[w_index, :]
+                self.dep_vectors[w_index, :] = shared[word].v
 
         norms = np.linalg.norm(self.context_vectors, axis=1)
         self.context_vectors = np.divide(self.context_vectors,
@@ -212,27 +170,23 @@ class RandomIndexing(EmbeddingModel):
         self.dep_vectors = np.divide(self.dep_vectors,
                                      norms[:, np.newaxis])
 
-    def get_completions(self, word, position):
-        v = self.order_vectors[glb.word_to_idx[word], :]
-        if position > 0:
-            probe = glb.deconvolve(glb.pos_i[position-1], v)
-        if position < 0:
-            probe = glb.deconvolve(glb.neg_i[abs(position+1)], v)
-        self.rank_words(np.dot(glb.base_vectors, probe))
+    def run_pool(self, function, batch, syntax=False):
+        with mp.Pool(processes=self.cpus) as pool:
+            result = pool.map_async(function, batch)
+            for r in result.get():
+                if syntax:
+                    for i, j in r.items():
+                        self.dep_vectors[shared.word_to_index[i], :] += j
+                    continue
 
-    def get_verb_neighbor(self, word, dep):
-        v = self.dep_vectors[glb.word_to_idx[word], :]
-        probe = glb.deconvolve(glb.verb_deps[dep], v)
-        self.rank_words(np.dot(glb.base_vectors, probe))
+                context = r[0]
+                order = r[1]
 
-    def unitary_vector(self):
-        v = np.random.normal(loc=0, scale=(1/(self.dim**0.5)), size=self.dim)
-        fft_val = np.fft.fft(v)
-        imag = fft_val.imag
-        real = fft_val.real
-        fft_norms = [np.sqrt(imag[n]**2 + real[n]**2) for n in range(len(v))]
-        fft_unit = np.divide(fft_val, fft_norms)
-        return np.fft.ifft(fft_unit).real
+                for i, j in order.items():
+                    self.order_vectors[shared.word_to_index[i], :] += j
+
+                for i, j in context.items():
+                    self.context_vectors[shared.word_to_index[i], :] += j
 
 
 class SkipGram(EmbeddingModel):
