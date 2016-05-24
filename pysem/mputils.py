@@ -3,31 +3,12 @@ import re
 import string
 import collections
 
-import numpy as np
 import multiprocessing as mp
 
 tokenizer = nltk.load('tokenizers/punkt/english.pickle')
 
 punc_translator = str.maketrans({key: None for key in string.punctuation})
 num_translator = str.maketrans({key: None for key in '1234567890'})
-
-
-class Container(object):
-    def __init__(self):
-        pass
-
-    def convolve(self, a, b):
-        return np.fft.ifft(np.fft.fft(a) * np.fft.fft(b)).real
-
-    def deconvolve(self, a, b):
-        return self.convolve(np.roll(a[::-1], 1), b)
-
-    def normalize(self, v):
-        if self.norm_of_vector(v) > 0:
-            return v / self.norm_of_vector(v)
-
-    def norm_of_vector(self, v):
-        return np.linalg.norm(v)
 
 
 def apply_async(func, paramlist):
