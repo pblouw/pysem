@@ -10,8 +10,8 @@ class Vocabulary(object):
                                         size=(len(wordlist), dimensions))
 
         self.word_to_index = {word: idx for idx, word in enumerate(wordlist)}
-        self.index_to_word = {idx: word for word, idx
-                              in self.word_to_index.items()}
+        self.index_to_word = {idx: word for idx, word in enumerate(wordlist)}
+        self.build_tags()
 
     def __getitem__(self, word):
         index = self.word_to_index[word]
@@ -30,27 +30,27 @@ class Vocabulary(object):
     def norm_of_vector(self, v):
         return np.linalg.norm(v)
 
+    def unitary_vector(self):
+        dim = self.dimensions
+        v = np.random.normal(loc=0, scale=(1/(dim**0.5)), size=dim)
+        fft_val = np.fft.fft(v)
+        imag = fft_val.imag
+        real = fft_val.real
+        fft_norms = [np.sqrt(imag[n]**2 + real[n]**2) for n in range(len(v))]
+        fft_unit = np.divide(fft_val, fft_norms)
+        return np.fft.ifft(fft_unit).real
+
+    def build_tags(self):
+        deps = set(['nsubj', 'dobj'])
+        self.pos_i = [self.unitary_vector() for i in range(5)]
+        self.neg_i = [self.unitary_vector() for i in range(5)]
+        self.pos_i = dict((i, j) for i, j in enumerate(self.pos_i))
+        self.neg_i = dict((i, j) for i, j in enumerate(self.neg_i))
+        self.verb_deps = {dep: self.unitary_vector() for dep in deps}
+
 
 class HRR(object):
-    """ A holographic reduced representation, based on the work of Tony Plate
-    (2003). HRRs constitute a vector symbolic architecture for encoding
-    symbolic structures in high-dimensional vector spaces. HRRs utilize
-    circular convolution for binding and vector addition for superposition.
-    Binding and unbinding are approximate, not exact, so HRRs are best thought
-    of as providing a lossy compression of a symbol structure into a vector
-    space.
 
-    Parameters
-    -----------
-    data : int or np.array
-        An int specifies the dimensionality of a randomly generated HRR. An
-        np.array can provided instead to specify the value on each dimension of
-        the HRR. (note that these values must be statistically distributed in
-        a particular way in order for the HRR to act as expected)
-    unitary : bool, optional
-        If True, the generated HRR will be unitary, i.e. its exact and
-        approximate inverses are equivalent.
-    """
     def __init__(self, vector, unitary=False):
         # self.v = self.normalize(vector)
         self.v = vector
