@@ -77,7 +77,7 @@ class Wikipedia(DataHandler):
                 yield article
 
                 self.article_count += 1
-                if self.article_count > self.article_limit:
+                if self.article_count >= self.article_limit:
                     raise StopIteration()
 
     def _sentences(self):
