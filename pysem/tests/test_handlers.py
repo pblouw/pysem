@@ -71,3 +71,10 @@ def test_stream_reset():
 
     wp._reset_streams()
     assert isinstance(next(wp.articles), str)
+
+
+def test_article_limit():
+    wp = Wikipedia(corpus_path, article_limit=1)
+    all_articles = [a for a in wp.articles]
+
+    assert len(all_articles) == wp.article_limit
