@@ -1,5 +1,4 @@
 import nltk
-import string
 import operator
 import spacy
 
@@ -8,11 +7,12 @@ import multiprocessing as mp
 
 from collections import defaultdict
 from hrr import Vocabulary, HRR
+from mputils import apply_async
 
 tokenizer = nltk.load('tokenizers/punkt/english.pickle')
 stopwords = nltk.corpus.stopwords.words('english')
 
-shared = None
+vocab = None
 
 nlp = spacy.load('en')
 
@@ -21,7 +21,7 @@ deps['VERB'] = set(['nsubj', 'dobj'])
 
 
 def zeros():
-    return np.zeros(shared.dimensions)
+    return np.zeros(vocab.dimensions)
 
 
 class EmbeddingModel(object):
@@ -34,25 +34,26 @@ class RandomIndexing(EmbeddingModel):
 
     def __init__(self, corpus):
         self._corpus = corpus
+        self.cpus = mp.cpu_count()
 
     @staticmethod
     def preprocess(article):
         sen_list = tokenizer.tokenize(article)
         sen_list = [s.replace('\n', ' ') for s in sen_list]
-        sen_list = [s.translate(shared.strip_num) for s in sen_list]
-        sen_list = [s.translate(shared.strip_pun) for s in sen_list]
+        sen_list = [s.translate(vocab.strip_num) for s in sen_list]
+        sen_list = [s.translate(vocab.strip_pun) for s in sen_list]
         sen_list = [s.lower() for s in sen_list if len(s) > 5]
         sen_list = [nltk.word_tokenize(s) for s in sen_list]
-        sen_list = [[w for w in s if w in shared.wordlist] for s in sen_list]
+        sen_list = [[w for w in s if w in vocab.wordlist] for s in sen_list]
         return sen_list
 
     @staticmethod
     def encode_context(sen_list):
         encodings = defaultdict(zeros)
         for sen in sen_list:
-            sen_sum = sum([shared[w].v for w in sen if w not in stopwords])
+            sen_sum = sum([vocab[w].v for w in sen if w not in stopwords])
             for word in sen:
-                word_sum = sen_sum - shared[word].v
+                word_sum = sen_sum - vocab[word].v
                 encodings[word] += word_sum
         return encodings
 
@@ -65,12 +66,12 @@ class RandomIndexing(EmbeddingModel):
                 o_sum = HRR(zeros())
                 for y in range(win):
                     if x+y+1 < len(sen):
-                        w = shared[sen[x+y+1]]
-                        p = HRR(shared.pos_i[y])
+                        w = vocab[sen[x+y+1]]
+                        p = HRR(vocab.pos_i[y])
                         o_sum += w * p
                     if x-y-1 >= 0:
-                        w = shared[sen[x-y-1]]
-                        p = HRR(shared.neg_i[y])
+                        w = vocab[sen[x-y-1]]
+                        p = HRR(vocab.neg_i[y])
                         o_sum += w * p
                 encodings[sen[x]] += o_sum.v
         return encodings
@@ -78,120 +79,100 @@ class RandomIndexing(EmbeddingModel):
     @staticmethod
     def encode_syntax(article):
         doc = nlp(article)
-        syn_dict = dict()
+        encodings = defaultdict(zeros)
 
         for sent in doc.sents:
             for token in sent:
                 word = token.orth_.lower()
-                if word in shared.wordlist:
+                if word in vocab.wordlist:
                     pos = token.pos_
 
                     children = [c for c in token.children]
                     for c in children:
                         dep = c.dep_
 
-                        if pos == 'VERB' and dep in shared.verb_deps:
+                        if pos == 'VERB' and dep in vocab.verb_deps:
                             print(c.orth_, dep, word)
-                            role = shared.verb_deps[dep]
+                            role = vocab.verb_deps[dep]
                             orth = c.orth_.lower()
-                            if orth in shared.wordlist:
-                                filler = shared[orth].v
-                                binding = shared.convolve(role, filler)
-                                try:
-                                    syn_dict[word] += binding
-                                except KeyError:
-                                    syn_dict[word] = binding
-
-        return syn_dict
+                            if orth in vocab.wordlist:
+                                filler = vocab[orth].v
+                                binding = vocab.convolve(role, filler)
+                                encodings[word] += binding
+        return encodings
 
     def get_synonyms(self, word):
-        probe = self.context_vectors[shared.word_to_index[word], :]
+        probe = self.context_vectors[vocab.word_to_index[word], :]
         self.rank_words(np.dot(self.context_vectors, probe))
 
     def rank_words(self, comparison):
-        rank = zip(range(len(shared.wordlist)), comparison)
+        rank = zip(range(len(vocab.wordlist)), comparison)
         rank = sorted(rank, key=operator.itemgetter(1), reverse=True)
-        top_words = [(shared.index_to_word[item[0]], item[1])
+        top_words = [(vocab.index_to_word[item[0]], item[1])
                      for item in rank[:10]]
 
         for word in top_words[:5]:
             print(word[0], word[1])
 
     def get_completions(self, word, position):
-        v = self.order_vectors[shared.word_to_index[word], :]
+        v = self.order_vectors[vocab.word_to_index[word], :]
         if position > 0:
-            probe = shared.deconvolve(shared.pos_i[position-1], v)
+            probe = vocab.deconvolve(vocab.pos_i[position-1], v)
         if position < 0:
-            probe = shared.deconvolve(shared.neg_i[abs(position+1)], v)
-        self.rank_words(np.dot(shared.vectors, probe))
+            probe = vocab.deconvolve(vocab.neg_i[abs(position+1)], v)
+        self.rank_words(np.dot(vocab.vectors, probe))
 
     def get_verb_neighbor(self, word, dep):
-        v = self.dep_vectors[shared.word_to_index[word], :]
-        probe = shared.deconvolve(shared.verb_deps[dep], v)
-        self.rank_words(np.dot(shared.vectors, probe))
-
-    def build_context_encodings(self):
-        pass
-
-    def build_order_encodings(self):
-        pass
-
-    def build_syntax_encodings(self):
-        pass
+        v = self.dep_vectors[vocab.word_to_index[word], :]
+        probe = vocab.deconvolve(vocab.verb_deps[dep], v)
+        self.rank_words(np.dot(vocab.vectors, probe))
 
     def normalize_encoding(self, encoding):
-        for word in shared.wordlist:
-            index = shared.word_to_index[word]
+        for word in vocab.wordlist:
+            index = vocab.word_to_index[word]
             if np.all(encoding[index, :] == 0):
-                encoding[index, :] = shared[word].v
+                encoding[index, :] = vocab[word].v
 
         norms = np.linalg.norm(encoding, axis=1)
         encoding = np.divide(encoding, norms[:, np.newaxis])
         return encoding
 
-    def train(self, dim, vocab, batchsize=500):
+    def train(self, dim, wordlist, batchsize=500):
         self.dim = dim
-        self.cpus = mp.cpu_count()
 
-        global shared
-        shared = Vocabulary(dim, vocab)
-        shared.strip_pun = str.maketrans({key: None
-                                          for key in string.punctuation})
-        shared.strip_num = str.maketrans({key: None for key in string.digits})
+        global vocab
+        vocab = Vocabulary(dim, wordlist)
 
-        self.context_vectors = np.zeros((len(vocab), self.dim))
-        self.order_vectors = np.zeros((len(vocab), self.dim))
-        self.dep_vectors = np.zeros((len(vocab), self.dim))
+        self.context_vectors = np.zeros((len(wordlist), self.dim))
+        self.order_vectors = np.zeros((len(wordlist), self.dim))
+        self.dep_vectors = np.zeros((len(wordlist), self.dim))
 
         batch = []
         for article in self._corpus.articles:
             batch.append(article)
             if len(batch) % batchsize == 0 and len(batch) > 0:
-                test = self.pool_preprocess(self.preprocess, batch)
-                test = [b for b in test if len(b) > 1]
-                self.run_pool(self.encode_context, test, self.context_vectors)
-                self.run_pool(self.encode_order, test, self.order_vectors)
-                self.run_pool(self.encode_syntax, batch, self.dep_vectors)
+                self.process_batch(batch)
                 batch = []
+
+        self.process_batch(batch)
 
         self.context_vectors = self.normalize_encoding(self.context_vectors)
         self.order_vectors = self.normalize_encoding(self.order_vectors)
         self.dep_vectors = self.normalize_encoding(self.dep_vectors)
 
-    def pool_preprocess(self, function, batch):
-        acc = []
-        with mp.Pool(processes=self.cpus) as pool:
-            result = pool.map_async(function, batch)
-            for r in result.get():
-                acc.append(r)
-        return acc
+    def process_batch(self, batch):
+        sents = apply_async(self.preprocess, batch)
+        sents = [lst for lst in sents if len(lst) > 1]
+        self.run_pool(self.encode_syntax, batch, self.dep_vectors)
+        self.run_pool(self.encode_context, sents, self.context_vectors)
+        self.run_pool(self.encode_order, sents, self.order_vectors)
 
     def run_pool(self, function, batch, encoding):
         with mp.Pool(processes=self.cpus) as pool:
             result = pool.map_async(function, batch)
             for _ in result.get():
                 for word, vec in _.items():
-                    encoding[shared.word_to_index[word], :] += vec
+                    encoding[vocab.word_to_index[word], :] += vec
 
 
 class SkipGram(EmbeddingModel):

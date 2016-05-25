@@ -1,3 +1,4 @@
+import string
 import numpy as np
 
 
@@ -12,6 +13,9 @@ class Vocabulary(object):
         self.word_to_index = {word: idx for idx, word in enumerate(wordlist)}
         self.index_to_word = {idx: word for idx, word in enumerate(wordlist)}
         self.build_tags()
+
+        self.strip_pun = str.maketrans({x: None for x in string.punctuation})
+        self.strip_num = str.maketrans({x: None for x in string.digits})
 
     def __getitem__(self, word):
         index = self.word_to_index[word]
