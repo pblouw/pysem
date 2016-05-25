@@ -1,6 +1,8 @@
 import os
 import re
+import random
 import types
+import pytest
 
 from pysem.handlers import Wikipedia
 from pysem.mputils import max_strip
@@ -46,3 +48,26 @@ def test_caching(tmpdir):
 
     all_cached_articles = [a for a in wp_cache.articles]
     assert len(all_cached_articles) < 90
+
+
+def test_vocab_build():
+    wp = Wikipedia(corpus_path)
+    wp.build_vocab(cutoff=0.05, batchsize=1)
+
+    assert isinstance(wp.vocab, list)
+    assert isinstance(random.choice(wp.vocab), str)
+    assert len(wp.vocab) > 1000
+
+    assert isinstance(next(wp.articles), str)
+
+
+def test_stream_reset():
+    wp = Wikipedia(corpus_path)
+    for _ in wp.articles:
+        continue
+
+    with pytest.raises(StopIteration):
+        next(wp.articles)
+
+    wp._reset_streams()
+    assert isinstance(next(wp.articles), str)
