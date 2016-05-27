@@ -6,8 +6,8 @@ import numpy as np
 import multiprocessing as mp
 
 from collections import defaultdict
-from hrr import Vocabulary, HRR
-from mputils import apply_async
+from .hrr import Vocabulary, HRR
+from .mputils import apply_async
 
 tokenizer = nltk.load('tokenizers/punkt/english.pickle')
 stopwords = nltk.corpus.stopwords.words('english')
@@ -92,7 +92,7 @@ class RandomIndexing(EmbeddingModel):
                         dep = c.dep_
 
                         if pos == 'VERB' and dep in vocab.verb_deps:
-                            print(c.orth_, dep, word)
+                            # print(c.orth_, dep, word)
                             role = vocab.verb_deps[dep]
                             orth = c.orth_.lower()
                             if orth in vocab.wordlist:
