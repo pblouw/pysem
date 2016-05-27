@@ -12,6 +12,7 @@ install:
 # command to run tests
 script:
   - python -m nltk.downloader punkt
+  - python -m nltk.downloader stopwords
   - python -m spacy.en.download
   - flake8 pysem
   - py.test
