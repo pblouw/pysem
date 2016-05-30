@@ -51,12 +51,12 @@ def test_caching(tmpdir):
 
 
 def test_vocab_build():
-    wp = Wikipedia(corpus_path)
+    wp = Wikipedia(corpus_path, article_limit=1)
     wp.build_vocab(cutoff=0.05, batchsize=1)
 
     assert isinstance(wp.vocab, list)
     assert isinstance(random.choice(wp.vocab), str)
-    assert len(wp.vocab) > 1000
+    assert len(wp.vocab) > 100
 
     assert isinstance(next(wp.articles), str)
 
