@@ -35,3 +35,15 @@ def test_syntax_encoding():
     model.train(dim=16, wordlist=wp.vocab, flags=['syntax'], batchsize=1)
 
     assert isinstance(model.syntax_vectors, type(np.array(0)))
+
+
+def test_default_encoding():
+    wp = Wikipedia(corpus_path, article_limit=1)
+    wp.build_vocab(cutoff=0.05, batchsize=1)
+
+    model = RandomIndexing(wp)
+    model.train(dim=16, wordlist=wp.vocab, batchsize=1)
+
+    assert isinstance(model.syntax_vectors, type(np.array(0)))
+    assert isinstance(model.order_vectors, type(np.array(0)))
+    assert isinstance(model.context_vectors, type(np.array(0)))
