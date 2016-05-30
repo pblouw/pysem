@@ -35,6 +35,9 @@ class RandomIndexing(EmbeddingModel):
     def __init__(self, corpus):
         self._corpus = corpus
         self.cpus = mp.cpu_count()
+        self.lookup = {'context': self.build_context_vectors,
+                       'order': self.build_order_vectors,
+                       'syntax': self.build_syntax_vectors}
 
     @staticmethod
     def preprocess(article):
@@ -101,18 +104,16 @@ class RandomIndexing(EmbeddingModel):
                                 encodings[word] += binding
         return encodings
 
-    def get_synonyms(self, word):
+    def rank_words(self, dotproducts, n=5):
+        scores = zip(range(len(vocab.wordlist)), dotproducts)
+        ranked = sorted(scores, key=operator.itemgetter(1), reverse=True)
+        top_n = [(vocab.index_to_word[x[0]], x[1]) for x in ranked[:n]]
+        for pair in top_n:
+            print(pair[0], pair[1])
+
+    def get_neighbors(self, word):
         probe = self.context_vectors[vocab.word_to_index[word], :]
         self.rank_words(np.dot(self.context_vectors, probe))
-
-    def rank_words(self, comparison):
-        rank = zip(range(len(vocab.wordlist)), comparison)
-        rank = sorted(rank, key=operator.itemgetter(1), reverse=True)
-        top_words = [(vocab.index_to_word[item[0]], item[1])
-                     for item in rank[:10]]
-
-        for word in top_words[:5]:
-            print(word[0], word[1])
 
     def get_completions(self, word, position):
         v = self.order_vectors[vocab.word_to_index[word], :]
@@ -123,7 +124,7 @@ class RandomIndexing(EmbeddingModel):
         self.rank_words(np.dot(vocab.vectors, probe))
 
     def get_verb_neighbor(self, word, dep):
-        v = self.dep_vectors[vocab.word_to_index[word], :]
+        v = self.syntax_vectors[vocab.word_to_index[word], :]
         probe = vocab.deconvolve(vocab.verb_deps[dep], v)
         self.rank_words(np.dot(vocab.vectors, probe))
 
@@ -137,33 +138,57 @@ class RandomIndexing(EmbeddingModel):
         encoding = np.divide(encoding, norms[:, np.newaxis])
         return encoding
 
-    def train(self, dim, wordlist, batchsize=500):
+    def build_context_vectors(self, batch):
+        sents = apply_async(self.preprocess, batch)
+        self.run_pool(self.encode_context, sents, self.context_vectors)
+
+    def build_order_vectors(self, batch):
+        sents = apply_async(self.preprocess, batch)
+        self.run_pool(self.encode_order, sents, self.order_vectors)
+
+    def build_syntax_vectors(self, batch):
+        self.run_pool(self.encode_syntax, batch, self.syntax_vectors)
+
+    def batches(self):
+        batch = []
+        for article in self._corpus.articles:
+            batch.append(article)
+            if len(batch) % self.batchsize == 0 and len(batch) > 0:
+                yield batch
+                batch = []
+        yield batch  # collects leftover articles in a batch < batchsize
+
+    def train(self, dim, wordlist, flags=None, batchsize=500):
         self.dim = dim
+        self.wordlist = wordlist
+        self.flags = flags
+        self.batchsize = batchsize
 
         global vocab
         vocab = Vocabulary(dim, wordlist)
 
-        self.context_vectors = np.zeros((len(wordlist), self.dim))
+        self.syntax_vectors = np.zeros((len(wordlist), self.dim))
         self.order_vectors = np.zeros((len(wordlist), self.dim))
-        self.dep_vectors = np.zeros((len(wordlist), self.dim))
+        self.context_vectors = np.zeros((len(wordlist), self.dim))
 
-        batch = []
-        for article in self._corpus.articles:
-            batch.append(article)
-            if len(batch) % batchsize == 0 and len(batch) > 0:
-                self.process_batch(batch)
-                batch = []
-
-        self.process_batch(batch)
+        for batch in self.batches():
+            if flags:
+                self.encode_flagged(batch)
+            else:
+                self.encode_all(batch)
 
         self.context_vectors = self.normalize_encoding(self.context_vectors)
         self.order_vectors = self.normalize_encoding(self.order_vectors)
-        self.dep_vectors = self.normalize_encoding(self.dep_vectors)
+        self.syntax_vectors = self.normalize_encoding(self.syntax_vectors)
 
-    def process_batch(self, batch):
+    def encode_flagged(self, batch):
+        for flag in self.flags:
+            self.lookup[flag](batch)
+
+    def encode_all(self, batch):
         sents = apply_async(self.preprocess, batch)
         sents = [lst for lst in sents if len(lst) > 1]
-        self.run_pool(self.encode_syntax, batch, self.dep_vectors)
+        self.run_pool(self.encode_syntax, batch, self.syntax_vectors)
         self.run_pool(self.encode_context, sents, self.context_vectors)
         self.run_pool(self.encode_order, sents, self.order_vectors)
 
