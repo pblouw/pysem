@@ -29,18 +29,42 @@ class EmbeddingModel(object):
     def __init__(self):
         pass
 
+    def rank_words(self, dotproducts, n=5):
+        scores = zip(range(len(vocab.wordlist)), dotproducts)
+        ranked = sorted(scores, key=operator.itemgetter(1), reverse=True)
+        top_n = [(vocab.index_to_word[x[0]], x[1]) for x in ranked[:n]]
+        for pair in top_n:
+            print(pair[0], pair[1])
+
+    def get_nearest(self, word):
+        probe = self.context_vectors[vocab.word_to_index[word], :]
+        self.rank_words(np.dot(self.context_vectors, probe))
+
+    def get_completions(self, word, position):
+        v = self.order_vectors[vocab.word_to_index[word], :]
+        if position > 0:
+            probe = vocab.deconvolve(vocab.pos_i[position-1], v)
+        if position < 0:
+            probe = vocab.deconvolve(vocab.neg_i[abs(position+1)], v)
+        self.rank_words(np.dot(vocab.vectors, probe))
+
+    def get_verb_neighbor(self, word, dep):
+        v = self.syntax_vectors[vocab.word_to_index[word], :]
+        probe = vocab.deconvolve(vocab.verb_deps[dep], v)
+        self.rank_words(np.dot(vocab.vectors, probe))
+
 
 class RandomIndexing(EmbeddingModel):
 
     def __init__(self, corpus):
         self._corpus = corpus
         self.cpus = mp.cpu_count()
-        self.lookup = {'context': self.build_context_vectors,
-                       'order': self.build_order_vectors,
-                       'syntax': self.build_syntax_vectors}
+        self.lookup = {'context': self._update_context_vectors,
+                       'order': self._update_order_vectors,
+                       'syntax': self._update_syntax_vectors}
 
     @staticmethod
-    def preprocess(article):
+    def _preprocess(article):
         sen_list = tokenizer.tokenize(article)
         sen_list = [s.replace('\n', ' ') for s in sen_list]
         sen_list = [s.translate(vocab.strip_num) for s in sen_list]
@@ -51,7 +75,7 @@ class RandomIndexing(EmbeddingModel):
         return sen_list
 
     @staticmethod
-    def encode_context(sen_list):
+    def _encode_context(sen_list):
         encodings = defaultdict(zeros)
         for sen in sen_list:
             sen_sum = sum([vocab[w].v for w in sen if w not in stopwords])
@@ -61,7 +85,7 @@ class RandomIndexing(EmbeddingModel):
         return encodings
 
     @staticmethod
-    def encode_order(sen_list):
+    def _encode_order(sen_list):
         encodings = defaultdict(zeros)
         win = 5
         for sen in sen_list:
@@ -80,7 +104,7 @@ class RandomIndexing(EmbeddingModel):
         return encodings
 
     @staticmethod
-    def encode_syntax(article):
+    def _encode_syntax(article):
         doc = nlp(article)
         encodings = defaultdict(zeros)
 
@@ -104,31 +128,18 @@ class RandomIndexing(EmbeddingModel):
                                 encodings[word] += binding
         return encodings
 
-    def rank_words(self, dotproducts, n=5):
-        scores = zip(range(len(vocab.wordlist)), dotproducts)
-        ranked = sorted(scores, key=operator.itemgetter(1), reverse=True)
-        top_n = [(vocab.index_to_word[x[0]], x[1]) for x in ranked[:n]]
-        for pair in top_n:
-            print(pair[0], pair[1])
+    def _encode_flagged(self, batch):
+        for flag in self.flags:
+            self.lookup[flag](batch)
 
-    def get_neighbors(self, word):
-        probe = self.context_vectors[vocab.word_to_index[word], :]
-        self.rank_words(np.dot(self.context_vectors, probe))
+    def _encode_all(self, batch):
+        sents = apply_async(self._preprocess, batch)
+        sents = [lst for lst in sents if len(lst) > 1]
+        self._run_pool(self._encode_syntax, batch, self.syntax_vectors)
+        self._run_pool(self._encode_context, sents, self.context_vectors)
+        self._run_pool(self._encode_order, sents, self.order_vectors)
 
-    def get_completions(self, word, position):
-        v = self.order_vectors[vocab.word_to_index[word], :]
-        if position > 0:
-            probe = vocab.deconvolve(vocab.pos_i[position-1], v)
-        if position < 0:
-            probe = vocab.deconvolve(vocab.neg_i[abs(position+1)], v)
-        self.rank_words(np.dot(vocab.vectors, probe))
-
-    def get_verb_neighbor(self, word, dep):
-        v = self.syntax_vectors[vocab.word_to_index[word], :]
-        probe = vocab.deconvolve(vocab.verb_deps[dep], v)
-        self.rank_words(np.dot(vocab.vectors, probe))
-
-    def normalize_encoding(self, encoding):
+    def _normalize_encoding(self, encoding):
         for word in vocab.wordlist:
             index = vocab.word_to_index[word]
             if np.all(encoding[index, :] == 0):
@@ -138,18 +149,18 @@ class RandomIndexing(EmbeddingModel):
         encoding = np.divide(encoding, norms[:, np.newaxis])
         return encoding
 
-    def build_context_vectors(self, batch):
-        sents = apply_async(self.preprocess, batch)
-        self.run_pool(self.encode_context, sents, self.context_vectors)
+    def _update_context_vectors(self, batch):
+        sents = apply_async(self._preprocess, batch)
+        self._run_pool(self._encode_context, sents, self.context_vectors)
 
-    def build_order_vectors(self, batch):
-        sents = apply_async(self.preprocess, batch)
-        self.run_pool(self.encode_order, sents, self.order_vectors)
+    def _update_order_vectors(self, batch):
+        sents = apply_async(self._preprocess, batch)
+        self._run_pool(self._encode_order, sents, self.order_vectors)
 
-    def build_syntax_vectors(self, batch):
-        self.run_pool(self.encode_syntax, batch, self.syntax_vectors)
+    def _update_syntax_vectors(self, batch):
+        self._run_pool(self._encode_syntax, batch, self.syntax_vectors)
 
-    def batches(self):
+    def _batches(self):
         batch = []
         for article in self._corpus.articles:
             batch.append(article)
@@ -157,6 +168,13 @@ class RandomIndexing(EmbeddingModel):
                 yield batch
                 batch = []
         yield batch  # collects leftover articles in a batch < batchsize
+
+    def _run_pool(self, function, batch, encoding):
+        with mp.Pool(processes=self.cpus) as pool:
+            result = pool.map_async(function, batch)
+            for _ in result.get():
+                for word, vec in _.items():
+                    encoding[vocab.word_to_index[word], :] += vec
 
     def train(self, dim, wordlist, flags=None, batchsize=500):
         self.dim = dim
@@ -171,33 +189,15 @@ class RandomIndexing(EmbeddingModel):
         self.order_vectors = np.zeros((len(wordlist), self.dim))
         self.context_vectors = np.zeros((len(wordlist), self.dim))
 
-        for batch in self.batches():
+        for batch in self._batches():
             if flags:
-                self.encode_flagged(batch)
+                self._encode_flagged(batch)
             else:
-                self.encode_all(batch)
+                self._encode_all(batch)
 
-        self.context_vectors = self.normalize_encoding(self.context_vectors)
-        self.order_vectors = self.normalize_encoding(self.order_vectors)
-        self.syntax_vectors = self.normalize_encoding(self.syntax_vectors)
-
-    def encode_flagged(self, batch):
-        for flag in self.flags:
-            self.lookup[flag](batch)
-
-    def encode_all(self, batch):
-        sents = apply_async(self.preprocess, batch)
-        sents = [lst for lst in sents if len(lst) > 1]
-        self.run_pool(self.encode_syntax, batch, self.syntax_vectors)
-        self.run_pool(self.encode_context, sents, self.context_vectors)
-        self.run_pool(self.encode_order, sents, self.order_vectors)
-
-    def run_pool(self, function, batch, encoding):
-        with mp.Pool(processes=self.cpus) as pool:
-            result = pool.map_async(function, batch)
-            for _ in result.get():
-                for word, vec in _.items():
-                    encoding[vocab.word_to_index[word], :] += vec
+        self.context_vectors = self._normalize_encoding(self.context_vectors)
+        self.order_vectors = self._normalize_encoding(self.order_vectors)
+        self.syntax_vectors = self._normalize_encoding(self.syntax_vectors)
 
 
 class SkipGram(EmbeddingModel):
