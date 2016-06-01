@@ -71,6 +71,10 @@ class DependencyNetwork(object):
         self.compute_nodes()
         print(sentence, self.get_sentence_embedding())
 
+    def backward_pass(self, error_signal):
+        root = self.get_tree_root()
+        children = self.get_children(root)
+
     def get_children(self, token):
         children = []
         for other_token in self.tree:
@@ -117,6 +121,11 @@ class DependencyNetwork(object):
             return
         else:
             self.compute_nodes()
+
+    def get_tree_root(self):
+        for token in self.tree:
+            if token.head.idx == token.idx:
+                return token
 
     def get_sentence_embedding(self):
         for token in self.tree:
