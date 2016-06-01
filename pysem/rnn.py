@@ -2,7 +2,6 @@ import pickle
 import spacy
 import platform
 import time
-import string
 
 import numpy as np
 
@@ -43,7 +42,7 @@ class DependencyNetwork(object):
         self.vocab = sorted(vocab)
         self.indices = {wrd: idx for idx, wrd in enumerate(self.vocab)}
         self.parser = spacy.load('en')
-        self.embeddings = np.random.random((len(vocab), self.dim))*eps*2-eps
+        self.vectors = np.random.random((len(vocab), self.dim))*eps*2-eps
         self.load_dependencies('depset.pickle')
         self.initialize_weights()
 
@@ -70,61 +69,59 @@ class DependencyNetwork(object):
         self.tree = [TokenWrapper(t) for t in self.parser(sentence)]
         self.compute_leaves()
         self.compute_nodes()
+        print(sentence, self.get_sentence_embedding())
 
-    def get_children(self, x):
+    def get_children(self, token):
         children = []
-        for token in self.tree:
-            if token.idx in [child.idx for child in x.children]:
-                children.append(token)
+        for other_token in self.tree:
+            if other_token.idx in [child.idx for child in token.children]:
+                children.append(other_token)
 
         return children
 
+    def has_children(self, token):
+        if list(token.children) == list():
+            return False
+        else:
+            return True
+
+    def embed(self, token, children=list()):
+        try:
+            idx = self.indices[token.lower_]
+            emb = np.dot(self.weights['token'], self.vectors[idx, :])
+        except KeyError:
+            emb = np.zeros(self.dim)
+
+        for child in children:
+            emb += np.dot(self.weights[child.token.dep_], child.embedding)
+
+        token.embedding = self.sigmoid(emb)
+        token.computed = True
+
     def compute_leaves(self):
         for token in self.tree:
-            if len(list(token.children)) == 0:
-                try:
-                    idx = self.indices[token.lower_]
-                except:
-                    vector = np.zeros(self.dim)
-                    token.embedding = vector
-                    token.computed = True
-                    continue
+            if not self.has_children(token):
+                self.embed(token)
 
-                vec = np.dot(self.weights['token'], self.embeddings[idx, :])
-                token.embedding = self.sigmoid(vec)
-                token.computed = True
-
-    def compute_nodes(self, indices=[]):
+    def compute_nodes(self):
         for token in self.tree:
-            if len(list(token.children)) != 0 and not token.computed:
+            if self.has_children(token) and not token.computed:
                 children = self.get_children(token)
-                computed = [c.computed for c in children]
+                children_computed = [child.computed for child in children]
 
-                if all(computed):
-                    try:
-                        index = self.indices[token.lower_]
-                    except:
-                        vector = np.zeros(self.dim)
-                        token.embedding = vector
-                        token.computed = True
-                        continue
+                if all(children_computed):
+                    self.embed(token, children)
 
-                    vector = np.dot(self.weights['token'],
-                                    self.embeddings[index, :])
-
-                    for child in children:
-                        vector += np.dot(self.weights[child.token.dep_],
-                                         child.embedding)
-
-                    token.embedding = self.sigmoid(vector)
-                    token.computed = True
-
-        computed = [t.computed for t in self.tree]
-        if all(computed):
+        nodes_computed = [token.computed for token in self.tree]
+        if all(nodes_computed):
             return
         else:
             self.compute_nodes()
 
+    def get_sentence_embedding(self):
+        for token in self.tree:
+            if token.head.idx == token.idx:
+                return token.embedding
 
 if platform.system() == 'Linux':
     snlipath = '/home/pblouw/corpora/snli_1.0/'
@@ -140,16 +137,13 @@ snli = SNLI(snlipath)
 snli.extractor = snli.get_sentences
 snli.load_vocab('snli_words')
 
-punc_translator = str.maketrans({key: None for key in string.punctuation})
-
-model = DependencyNetwork(50, snli.vocab)
+model = DependencyNetwork(4, snli.vocab)
 
 start_time = time.time()
 
-for _ in range(50000):
+for _ in range(5000):
     sentence = next(snli.train_data)[0]
-    sentence = sentence.translate(punc_translator)
-    print(sentence)
+
     model.forward_pass(sentence)
 
 print('Total runtime: ', time.time() - start_time)
