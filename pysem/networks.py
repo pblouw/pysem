@@ -4,6 +4,7 @@ import platform
 
 import numpy as np
 
+from collections import defaultdict
 from handlers import SNLI
 from spacy_utils import TokenWrapper
 
@@ -29,8 +30,18 @@ class Model(object):
         return np.tanh(x)
 
     @staticmethod
+    def tanh_grad(x):
+        return 1.0 - np.tanh(x)**2
+
+    @staticmethod
     def softmax(x):
         return np.exp(x) / np.sum(np.exp(x), axis=0)
+
+
+def zeros(dim):
+    def func():
+        return np.zeros((dim, dim))
+    return func
 
 
 class MLP(Model):
@@ -59,7 +70,6 @@ class MLP(Model):
         self.node_to_label = {0: 'entailment', 1: 'neutral', 2: 'contradicts'}
 
     def get_activations(self, x):
-        print(x.shape)
         self.yh = self.sigmoid(np.dot(self.w1, x))
         self.yh = np.vstack((np.ones(self.bsize), self.yh))
 
@@ -109,15 +119,15 @@ class MLP(Model):
             # Compute gradients
             yo_grad = self.yo-self.targ_bag
             yh_grad = np.dot(self.w2.T, yo_grad)*(self.yh*(1-self.yh))
-            w2_grad = np.dot(yo_grad, self.yh.T) / self.bsize
-            w1_grad = np.dot(yh_grad[1:, :], xs.T) / self.bsize
+            # w2_grad = np.dot(yo_grad, self.yh.T) / self.bsize
+            # w1_grad = np.dot(yh_grad[1:, :], xs.T) / self.bsize
 
             self.yi_grad = np.dot(self.w1.T, yh_grad[1:])
             self.yo_grad = yo_grad
             self.yh_grad = yh_grad
             # Update weights
-            self.w1 += -rate * w1_grad
-            self.w2 += -rate * w2_grad
+            # self.w1 += -rate * w1_grad
+            # self.w2 += -rate * w2_grad
 
             # Log the cost of the current weights
             self.costs.append(self.get_cost())
@@ -201,6 +211,7 @@ class DependencyNetwork(Model):
         self.vectors = np.random.random((len(vocab), self.dim))*eps*2-eps
         self.load_dependencies('dependencies.pickle')
         self.initialize_weights()
+        self.wgrads = defaultdict(zeros(self.dim))
 
     @staticmethod
     def gaussian_id(dim):
@@ -221,17 +232,54 @@ class DependencyNetwork(Model):
         for token in self.tree:
             token.computed = False
 
+    def reset_embeddings(self):
+        for token in self.tree:
+            token._embedding = None
+
+    def compute_gradients(self):
+        for token in self.tree:
+            if not self.has_children(token):
+                continue
+            if token.gradient is not None:
+                children = self.get_children(token)
+                gradient = token.gradient
+                for child in children:
+                    if child.gradient is not None:
+                        continue
+                    self.wgrads[child.dep_] += np.outer(gradient,
+                                                        child.embedding)
+                    child.gradient = np.dot(self.weights[child.dep_].T,
+                                            gradient)
+                    nonlinearity = child.embedding * (1-child.embedding)
+                    nonlinearity = nonlinearity.reshape((len(nonlinearity), 1))
+
+                    child.gradient = child.gradient * nonlinearity
+                    child.computed = True
+                    print(child, ' Backpropped!')
+
+        grads_computed = [t.computed for t in self.tree]
+        if all(grads_computed):
+            print('DONE')
+            return
+        else:
+            self.compute_gradients()
+
     def forward_pass(self, sentence):
         self.tree = [TokenWrapper(t) for t in self.parser(sentence)]
         self.compute_leaves()
         self.compute_nodes()
         self.reset_comp_graph()
 
-    def backward_pass(self, error_grad):
+    def backward_pass(self, error_grad, rate=1.5):
         self.set_root_gradient(error_grad)
-        for token in self.tree:
-            if token.gradient is not None:
-                print(token, token.gradient)
+        self.compute_gradients()
+
+        for dep in self.wgrads:
+            self.weights[dep] += -rate * self.wgrads[dep]
+
+        self.wgrads = defaultdict(zeros(self.dim))
+        self.reset_comp_graph()
+        self.reset_embeddings()
 
     def get_children(self, token):
         children = []
@@ -255,9 +303,9 @@ class DependencyNetwork(Model):
             emb = np.zeros(self.dim)
 
         for child in children:
-            emb += np.dot(self.weights[child.token.dep_], child.embedding)
+            emb += np.dot(self.weights[child.dep_], child.embedding)
 
-        token.embedding = self.sigmoid(emb)
+        token.embedding = self.tanh(emb)
         token.computed = True
 
     def compute_leaves(self):
@@ -283,7 +331,7 @@ class DependencyNetwork(Model):
     def set_root_gradient(self, grad):
         for token in self.tree:
             if token.head.idx == token.idx:
-                token.gradient = grad
+                token.gradient = grad[1:]
                 token.computed = True
 
     def get_sentence_embedding(self):
@@ -319,20 +367,21 @@ depnet = DependencyNetwork(embedding_dim=50, vocab=snli.vocab)
 classifier = MLP(di=50, dh=50, do=3)
 
 
-depnet.forward_pass(s1)
+for _ in range(100):
+    depnet.forward_pass(s1)
 
-bias = np.ones(1)
-svec = depnet.get_sentence_embedding()
+    bias = np.ones(1)
+    svec = depnet.get_sentence_embedding()
 
-xs = np.concatenate((bias, svec))
-ys = label
+    xs = np.concatenate((bias, svec))
+    ys = label
 
-classifier.train(xs, ys, iters=1)
+    classifier.train(xs, ys, iters=1)
 
-depnet.backward_pass(classifier.yi_grad)
+    depnet.backward_pass(classifier.yi_grad)
 
-# print(classifier.predict(xs))
-# print(label)
+    print(classifier.predict(xs))
+    print(label)
 # print(classifier.yi_grad)
 # print(classifier.yh_grad)
 # print(classifier.yo_grad)
