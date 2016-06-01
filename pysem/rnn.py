@@ -1,16 +1,39 @@
 import pickle
 import spacy
 import platform
+import time
+import string
+
 import numpy as np
 
 from handlers import SNLI
 
 
-class DependencyNode(object):
+class TokenWrapper(object):
     def __init__(self, token):
         self.token = token
-        self.embedding = None
         self.computed = False
+        self._embedding = None
+
+    @property
+    def embedding(self):
+        return self._embedding
+
+    @embedding.setter
+    def embedding(self, v):
+        if not isinstance(v, np.ndarray):
+            raise TypeError('Tree embeddings must be of type numpy.ndarray')
+        else:
+            self._embedding = v
+
+    def __str__(self):
+        return self.token.lower_
+
+    def __getattr__(self, attr):
+        if attr in self.__dict__:
+            return getattr(self, attr)
+        else:
+            return getattr(self.token, attr)
 
 
 class DependencyNetwork(object):
@@ -21,7 +44,7 @@ class DependencyNetwork(object):
         self.indices = {wrd: idx for idx, wrd in enumerate(self.vocab)}
         self.parser = spacy.load('en')
         self.embeddings = np.random.random((len(vocab), self.dim))*eps*2-eps
-        self.load_dependencies('dependencies.pickle')
+        self.load_dependencies('depset.pickle')
         self.initialize_weights()
 
     @staticmethod
@@ -44,46 +67,63 @@ class DependencyNetwork(object):
             self.weights[dep] = self.gaussian_id(self.dim)
 
     def forward_pass(self, sentence):
-        self.parse = self.parser(sentence)
-        self.nodes = {t: DependencyNode(t) for t in self.parse}
+        self.tree = [TokenWrapper(t) for t in self.parser(sentence)]
+        self.compute_leaves()
+        self.compute_nodes()
 
-        for token in self.parse:
-            if list(token.subtree) == [token]:
-                node = self.nodes[token]
-                index = self.indices[token.lower_]
+    def get_children(self, x):
+        children = []
+        for token in self.tree:
+            if token.idx in [child.idx for child in x.children]:
+                children.append(token)
 
-                leaf_embedding = self.sigmoid(np.dot(self.weights['token'],
-                                              self.embeddings[index, :]))
+        return children
 
-                node.embedding = leaf_embedding
-                node.computed = True
+    def compute_leaves(self):
+        for token in self.tree:
+            if len(list(token.children)) == 0:
+                try:
+                    idx = self.indices[token.lower_]
+                except:
+                    vector = np.zeros(self.dim)
+                    token.embedding = vector
+                    token.computed = True
+                    continue
 
-                print(token, ' Added Embedding!')
+                vec = np.dot(self.weights['token'], self.embeddings[idx, :])
+                token.embedding = self.sigmoid(vec)
+                token.computed = True
 
-        for token in self.parse:
-            if list(token.subtree) != [token]:
-                children = list(token.children)
-                children = [self.nodes[child] for child in children]
-
+    def compute_nodes(self, indices=[]):
+        for token in self.tree:
+            if len(list(token.children)) != 0 and not token.computed:
+                children = self.get_children(token)
                 computed = [c.computed for c in children]
+
                 if all(computed):
-                    # print(token, list(token.children), computed)
+                    try:
+                        index = self.indices[token.lower_]
+                    except:
+                        vector = np.zeros(self.dim)
+                        token.embedding = vector
+                        token.computed = True
+                        continue
 
-                    index = self.indices[token.lower_]
-                    mapping = np.dot(self.weights['token'],
-                                     self.embeddings[index, :])
+                    vector = np.dot(self.weights['token'],
+                                    self.embeddings[index, :])
+
                     for child in children:
-                        mapping += np.dot(self.weights[node.token.dep_],
-                                          node.embedding)
+                        vector += np.dot(self.weights[child.token.dep_],
+                                         child.embedding)
 
-                    node = self.nodes[token]
-                    node.embedding = self.sigmoid(mapping)
-                    node.computed = True
-                    print(node.token, [c.embedding for c in children],
-                          [c.token.dep_ for c in children])
+                    token.embedding = self.sigmoid(vector)
+                    token.computed = True
 
-    def compute_available(self, parse):
-        pass
+        computed = [t.computed for t in self.tree]
+        if all(computed):
+            return
+        else:
+            self.compute_nodes()
 
 
 if platform.system() == 'Linux':
@@ -98,15 +138,23 @@ else:
 
 snli = SNLI(snlipath)
 snli.extractor = snli.get_sentences
-# snli.build_vocab()
 snli.load_vocab('snli_words')
 
-sentence = next(snli.train_data)[0]
+punc_translator = str.maketrans({key: None for key in string.punctuation})
 
-model = DependencyNetwork(4, snli.vocab)
-model.forward_pass(sentence)
+model = DependencyNetwork(50, snli.vocab)
 
-print(sentence)
-for node in model.nodes.values():
-    if node.embedding is not None:
-        print(node.token)
+start_time = time.time()
+
+for _ in range(50000):
+    sentence = next(snli.train_data)[0]
+    sentence = sentence.translate(punc_translator)
+    print(sentence)
+    model.forward_pass(sentence)
+
+print('Total runtime: ', time.time() - start_time)
+# print(sentence)
+# for token in model.tree:
+#     # print(token._embedding)
+#     if token.embedding is not None:
+#         print(token, token.embedding)
