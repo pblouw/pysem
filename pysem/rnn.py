@@ -72,8 +72,9 @@ class DependencyNetwork(object):
         print(sentence, self.get_sentence_embedding())
 
     def backward_pass(self, error_signal):
-        root = self.get_tree_root()
-        children = self.get_children(root)
+        # root = self.get_tree_root()
+        # children = self.get_children(root)
+        pass
 
     def get_children(self, token):
         children = []
