@@ -1,6 +1,7 @@
 import pickle
 import spacy
 import platform
+import random
 
 import numpy as np
 
@@ -67,7 +68,8 @@ class MLP(Model):
         self.w2 = np.random.random((do, dh+1))*eps*2-eps
         self.costs = []
         self.bsize = 1
-        self.node_to_label = {0: 'entailment', 1: 'neutral', 2: 'contradicts'}
+        self.node_to_label = {0: 'entailment', 1: 'neutral',
+                              2: 'contradiction'}
 
     def get_activations(self, x):
         self.yh = self.sigmoid(np.dot(self.w1, x))
@@ -75,7 +77,7 @@ class MLP(Model):
 
         self.yo = self.softmax(np.dot(self.w2, self.yh))
 
-    def train(self, xs, ys, iters, bsize=1, rate=0.3):
+    def train(self, xs, ys, iters, bsize=1, rate=0.1):
         self.bsize = bsize
         xs = np.reshape(xs, (len(xs), 1))
         # BoW = CountVectorizer(binary=True)
@@ -119,15 +121,15 @@ class MLP(Model):
             # Compute gradients
             yo_grad = self.yo-self.targ_bag
             yh_grad = np.dot(self.w2.T, yo_grad)*(self.yh*(1-self.yh))
-            # w2_grad = np.dot(yo_grad, self.yh.T) / self.bsize
-            # w1_grad = np.dot(yh_grad[1:, :], xs.T) / self.bsize
+            w2_grad = np.dot(yo_grad, self.yh.T) / self.bsize
+            w1_grad = np.dot(yh_grad[1:, :], xs.T) / self.bsize
 
             self.yi_grad = np.dot(self.w1.T, yh_grad[1:])
             self.yo_grad = yo_grad
             self.yh_grad = yh_grad
             # Update weights
-            # self.w1 += -rate * w1_grad
-            # self.w2 += -rate * w2_grad
+            self.w1 += -rate * w1_grad
+            self.w2 += -rate * w2_grad
 
             # Log the cost of the current weights
             self.costs.append(self.get_cost())
@@ -243,34 +245,40 @@ class DependencyNetwork(Model):
             if token.gradient is not None:
                 children = self.get_children(token)
                 gradient = token.gradient
+                if np.isnan(gradient).any():
+                    print(token)
+                    print(self.sentence)
+                    raise ValueError('NaN encountered early')
                 for child in children:
                     if child.gradient is not None:
                         continue
-                    self.wgrads[child.dep_] += np.outer(gradient,
-                                                        child.embedding)
+                    x = np.outer(gradient, child.embedding)
+                    if np.isnan(x).any():
+                        raise ValueError('NaN encountered')
+                    self.wgrads[child.dep_] += x
                     child.gradient = np.dot(self.weights[child.dep_].T,
                                             gradient)
-                    nonlinearity = child.embedding * (1-child.embedding)
-                    nonlinearity = nonlinearity.reshape((len(nonlinearity), 1))
+                    nonlinearity = child.embedding * (1 - child.embedding)
+                    nonlinearity = nonlinearity.reshape((len(nonlinearity),
+                                                         1))
 
                     child.gradient = child.gradient * nonlinearity
                     child.computed = True
-                    print(child, ' Backpropped!')
 
         grads_computed = [t.computed for t in self.tree]
         if all(grads_computed):
-            print('DONE')
             return
         else:
             self.compute_gradients()
 
     def forward_pass(self, sentence):
+        self.sentence = sentence
         self.tree = [TokenWrapper(t) for t in self.parser(sentence)]
         self.compute_leaves()
         self.compute_nodes()
         self.reset_comp_graph()
 
-    def backward_pass(self, error_grad, rate=1.5):
+    def backward_pass(self, error_grad, rate=0.25):
         self.set_root_gradient(error_grad)
         self.compute_gradients()
 
@@ -305,7 +313,7 @@ class DependencyNetwork(Model):
         for child in children:
             emb += np.dot(self.weights[child.dep_], child.embedding)
 
-        token.embedding = self.tanh(emb)
+        token.embedding = self.sigmoid(emb)
         token.computed = True
 
     def compute_leaves(self):
@@ -331,7 +339,7 @@ class DependencyNetwork(Model):
     def set_root_gradient(self, grad):
         for token in self.tree:
             if token.head.idx == token.idx:
-                token.gradient = grad[1:]
+                token.gradient = grad
                 token.computed = True
 
     def get_sentence_embedding(self):
@@ -357,31 +365,67 @@ snli.load_vocab('snli_words')
 
 # snli = SNLI(snlipath)
 # snli.build_vocab()
+s1_depnet = DependencyNetwork(embedding_dim=200, vocab=snli.vocab)
+s2_depnet = DependencyNetwork(embedding_dim=200, vocab=snli.vocab)
 
-data = next(snli.train_data)
-# data = next(snli.train_data)
-s1 = data[0][0]
-label = data[1]
+classifier = MLP(di=400, dh=400, do=3)
 
-depnet = DependencyNetwork(embedding_dim=50, vocab=snli.vocab)
-classifier = MLP(di=50, dh=50, do=3)
+data = [d for d in snli.train_data if d[1] != '-']
 
+samples = random.sample(data, 1000)
+counter = 0
+for _ in range(200):
+    print(counter)
+    for sample in samples:
 
-for _ in range(100):
-    depnet.forward_pass(s1)
+        s1 = sample[0][0]
+        s2 = sample[0][1]
+        label = sample[1]
+
+        s1_depnet.forward_pass(s1)
+        s2_depnet.forward_pass(s2)
+
+        bias = np.ones(1)
+        s1 = s1_depnet.get_sentence_embedding()
+        s2 = s2_depnet.get_sentence_embedding()
+
+        xs = np.concatenate((bias, s1, s2))
+        ys = label
+
+        classifier.train(xs, ys, iters=1)
+        s1_grad = classifier.yi_grad[1:201]
+        s2_grad = classifier.yi_grad[201:]
+
+        s1_depnet.backward_pass(s1_grad)
+        s2_depnet.backward_pass(s2_grad)
+    counter += 1
+    # print(classifier.predict(xs))
+    # print(label)
+
+count = 0
+for sample in samples:
+    s1 = sample[0][0]
+    s2 = sample[0][1]
+    label = sample[1]
+
+    s1_depnet.forward_pass(s1)
+    s2_depnet.forward_pass(s2)
 
     bias = np.ones(1)
-    svec = depnet.get_sentence_embedding()
+    s1 = s1_depnet.get_sentence_embedding()
+    s2 = s2_depnet.get_sentence_embedding()
 
-    xs = np.concatenate((bias, svec))
-    ys = label
+    xs = np.concatenate((bias, s1, s2))
+    prediction = classifier.predict(xs)
+    print(prediction, label)
+    if prediction == label:
+        count += 1
 
-    classifier.train(xs, ys, iters=1)
+print('Accuracy: ', count / float(len(samples)))
 
-    depnet.backward_pass(classifier.yi_grad)
+# print(s1_depnet.weights)
 
-    print(classifier.predict(xs))
-    print(label)
+
 # print(classifier.yi_grad)
 # print(classifier.yh_grad)
 # print(classifier.yo_grad)
