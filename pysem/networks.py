@@ -77,42 +77,11 @@ class MLP(Model):
 
         self.yo = self.softmax(np.dot(self.w2, self.yh))
 
-    def train(self, xs, ys, iters, bsize=1, rate=0.2):
+    def train(self, xs, ys, iters, bsize=1, rate=0.35):
         self.bsize = bsize
         xs = np.reshape(xs, (len(xs), 1))
-        # BoW = CountVectorizer(binary=True)
-        # BoW.fit(snli.vocab)
-
-        # snli.extractor = snli.get_xy_pairs
-        # data = {d for d in snli.train_data if d[1] != '-'}
-        # print('Training set size: ', len(data))
 
         for _ in range(iters):
-
-            # if _ % 10000 == 0:
-            #     if _ != 0:
-            #         print('Completed ', _, ' training iterations!')
-
-            # if _ == 0.6 * iters:
-            #     rate = 0.15
-            #     print('Dropped rate to ', rate)
-            # if _ == 0.8 * iters:
-            #     rate = 0.075
-            #     print('Dropped rate to ', rate)
-
-            # batch = random.sample(data, self.bsize)
-
-            # Turn batches into arrays
-            # prems = [s[0][0] for s in batch]
-            # hyps = [s[0][1] for s in batch]
-            # targs = [s[1] for s in batch]
-
-            # prem_bag = BoW.transform(prems).toarray().T
-            # prem_bag = np.vstack((np.ones(self.bsize), prem_bag))
-
-            # hyp_bag = BoW.transform(hyps).toarray().T
-
-            # inp_bag = np.vstack((prem_bag, hyp_bag))
             self.targ_bag = self.binarize([ys])
 
             # Compute activations
@@ -197,7 +166,6 @@ class MLP(Model):
         lookup = {'entailment': 0, 'neutral': 1, 'contradiction': 2, '-': 1}
         y_idx = [lookup[l] for l in label_list]
         x_idx = range(len(label_list))
-
         vals = np.zeros((3, len(label_list)))
         vals[y_idx, x_idx] = 1
         return vals
@@ -205,15 +173,23 @@ class MLP(Model):
 
 class DependencyNetwork(Model):
 
-    def __init__(self, embedding_dim, vocab, eps=0.1):
+    def __init__(self, embedding_dim, vocab):
         self.dim = embedding_dim
         self.vocab = sorted(vocab)
         self.indices = {wrd: idx for idx, wrd in enumerate(self.vocab)}
         self.parser = spacy.load('en')
-        self.vectors = np.random.random((len(vocab), self.dim))*eps*2-eps
         self.load_dependencies('dependencies.pickle')
-        self.initialize_weights()
         self.wgrads = defaultdict(zeros(self.dim))
+        self.initialize_weights()
+
+    def one_hot(self, token):
+        zeros = np.zeros(len(self.vocab))
+        try:
+            index = self.indices[token.lower_]
+            zeros[index] = 1
+        except KeyError:
+            pass
+        return zeros.reshape((len(zeros), 1))
 
     @staticmethod
     def gaussian_id(dim):
@@ -225,8 +201,10 @@ class DependencyNetwork(Model):
         with open(path, 'rb') as pfile:
             self.depset = pickle.load(pfile)
 
-    def initialize_weights(self):
-        self.weights = {'token': self.gaussian_id(self.dim)}
+    def initialize_weights(self, eps=0.1):
+        self.weights = {'token': np.random.random((self.dim,
+                        len(self.vocab)))*eps*2-eps}
+        self.wgrads['token'] = np.zeros((self.dim, len(self.vocab)))
         for dep in self.depset:
             self.weights[dep] = self.gaussian_id(self.dim)
 
@@ -238,40 +216,46 @@ class DependencyNetwork(Model):
         for token in self.tree:
             token._embedding = None
 
+    def clip_gradient(self, token):
+        if np.linalg.norm(token.gradient) > 5:
+            token.gradient = (token.gradient /
+                              np.linalg.norm(token.gradient)) * 5
+
+    def update_word_embeddings(self):
+        for token in self.tree:
+            one_hot = self.one_hot(token)
+            self.wgrads['token'] += np.outer(token.gradient, one_hot)
+
     def compute_gradients(self):
         for token in self.tree:
             if not self.has_children(token):
                 continue
+
             if token.gradient is not None:
-                if np.linalg.norm(token.gradient) > 5:
-                    token.gradient = (token.gradient /
-                                      np.linalg.norm(token.gradient)) * 5
+                self.clip_gradient(token)
 
                 children = self.get_children(token)
-                gradient = token.gradient
-                if np.isnan(gradient).any():
-                    print(token)
-                    print(self.sentence)
-                    raise ValueError('NaN encountered early')
+
+                if np.isnan(token.gradient).any():
+                    raise ValueError('NaN encountered')
+
                 for child in children:
                     if child.gradient is not None:
                         continue
-                    x = np.outer(gradient, child.embedding)
-                    if np.isnan(x).any():
-                        raise ValueError('NaN encountered')
-                    self.wgrads[child.dep_] += x
-                    child.gradient = np.dot(self.weights[child.dep_].T,
-                                            gradient)
-                    # nonlinearity = child.embedding * (1 - child.embedding)
-                    nonlinearity = self.tanh_grad(child.embedding)
-                    nonlinearity = nonlinearity.reshape((len(nonlinearity),
-                                                         1))
 
-                    child.gradient = child.gradient * nonlinearity
+                    self.wgrads[child.dep_] += np.outer(token.gradient,
+                                                        child.embedding)
+                    child.gradient = np.dot(self.weights[child.dep_].T,
+                                            token.gradient)
+                    nl = self.tanh_grad(child.embedding)
+                    nl = nl.reshape((len(nl), 1))
+
+                    child.gradient = child.gradient * nl
                     child.computed = True
 
         grads_computed = [t.computed for t in self.tree]
         if all(grads_computed):
+            self.update_word_embeddings()
             return
         else:
             self.compute_gradients()
@@ -283,7 +267,7 @@ class DependencyNetwork(Model):
         self.compute_nodes()
         self.reset_comp_graph()
 
-    def backward_pass(self, error_grad, rate=0.05):
+    def backward_pass(self, error_grad, rate=0.35):
         self.set_root_gradient(error_grad)
         self.compute_gradients()
 
@@ -291,6 +275,7 @@ class DependencyNetwork(Model):
             self.weights[dep] += -rate * self.wgrads[dep]
 
         self.wgrads = defaultdict(zeros(self.dim))
+        self.wgrads['token'] = np.zeros((self.dim, len(self.vocab)))
         self.reset_comp_graph()
         self.reset_embeddings()
 
@@ -310,10 +295,9 @@ class DependencyNetwork(Model):
 
     def embed(self, token, children=list()):
         try:
-            idx = self.indices[token.lower_]
-            emb = np.dot(self.weights['token'], self.vectors[idx, :])
+            emb = np.dot(self.weights['token'], self.one_hot(token))
         except KeyError:
-            emb = np.zeros(self.dim)
+            emb = np.zeros(self.dim).reshape((self.dim, 1))
 
         for child in children:
             emb += np.dot(self.weights[child.dep_], child.embedding)
@@ -357,31 +341,28 @@ snli = SNLI(snlipath)
 snli.extractor = snli.get_xy_pairs
 snli.load_vocab('snli_words')
 
-# model = DependencyNetwork(4, snli.vocab)
-
-# start_time = time.time()
-
-# for _ in range(5000):
-#     sentence = next(snli.train_data)[0]
-
-#     model.forward_pass(sentence)
-
-# print('Total runtime: ', time.time() - start_time)
-
-# snli = SNLI(snlipath)
-# snli.build_vocab()
 s1_depnet = DependencyNetwork(embedding_dim=200, vocab=snli.vocab)
 s2_depnet = DependencyNetwork(embedding_dim=200, vocab=snli.vocab)
 
 classifier = MLP(di=400, dh=400, do=3)
 
-data = [d for d in snli.train_data if d[1] != '-']
+data = [d for d in snli.dev_data if d[1] != '-']
+data = random.sample(data, 500)
 
+iters = 1
+rate = 0.1
 counter = 0
-for _ in range(1000):
+for _ in range(iters):
+    print('On training iteration ', _)
+    # samples = random.sample(data, 5000)
+    if _ == 0.6 * iters:
+        rate = 0.05
+        print('Dropped rate to ', rate)
+    if _ == 0.8 * iters:
+        rate = 0.025
+        print('Dropped rate to ', rate)
 
-    samples = random.sample(data, 5000)
-    for sample in samples:
+    for sample in data:
 
         s1 = sample[0][0]
         s2 = sample[0][1]
@@ -390,26 +371,31 @@ for _ in range(1000):
         s1_depnet.forward_pass(s1)
         s2_depnet.forward_pass(s2)
 
-        bias = np.ones(1)
+        bias = np.ones(1).reshape(1, 1)
         s1 = s1_depnet.get_sentence_embedding()
         s2 = s2_depnet.get_sentence_embedding()
+
+        # print(bias.shape, s1.shape, s2.shape)
 
         xs = np.concatenate((bias, s1, s2))
         ys = label
 
-        classifier.train(xs, ys, iters=1)
+        classifier.train(xs, ys, iters=1, rate=rate)
         s1_grad = classifier.yi_grad[1:201]
         s2_grad = classifier.yi_grad[201:]
 
-        s1_depnet.backward_pass(s1_grad)
-        s2_depnet.backward_pass(s2_grad)
+        s1_depnet.backward_pass(s1_grad, rate=rate)
+        s2_depnet.backward_pass(s2_grad, rate=rate)
     counter += 1
     # print(classifier.predict(xs))
     # print(label)
 
+print('Calculating accuracies')
+snli._reset_streams()
+snli.extractor = snli.get_xy_pairs
+
+# data = [d for d in snli.dev_data if d[1] != '-']
 count = 0
-
-
 for sample in data:
     s1 = sample[0][0]
     s2 = sample[0][1]
@@ -418,57 +404,13 @@ for sample in data:
     s1_depnet.forward_pass(s1)
     s2_depnet.forward_pass(s2)
 
-    bias = np.ones(1)
+    bias = np.ones(1).reshape(1, 1)
     s1 = s1_depnet.get_sentence_embedding()
     s2 = s2_depnet.get_sentence_embedding()
 
     xs = np.concatenate((bias, s1, s2))
     prediction = classifier.predict(xs)
-    # print(prediction, label)
     if prediction == label:
         count += 1
 
-print('Train set accuracy: ', count / float(len(data)))
-
-
-data = [d for d in snli.dev_data if d[1] != '-']
-
-for sample in data:
-    s1 = sample[0][0]
-    s2 = sample[0][1]
-    label = sample[1]
-
-    s1_depnet.forward_pass(s1)
-    s2_depnet.forward_pass(s2)
-
-    bias = np.ones(1)
-    s1 = s1_depnet.get_sentence_embedding()
-    s2 = s2_depnet.get_sentence_embedding()
-
-    xs = np.concatenate((bias, s1, s2))
-    prediction = classifier.predict(xs)
-    # print(prediction, label)
-    if prediction == label:
-        count += 1
-
-print('Train set accuracy: ', count / float(len(data)))
-
-
-# print(s1_depnet.weights)
-
-
-# print(classifier.yi_grad)
-# print(classifier.yh_grad)
-# print(classifier.yo_grad)
-
-# model = MLP(2*len(BoW.get_feature_names()), 200, 3)
-# print('Dev Set Accuracy Before: ', model.get_accuracy(snli, 'dev'))
-
-# model.train(snli, iters=1000, bsize=100)
-
-# print('Train Set Accuracy After: ', model.get_accuracy(snli, 'train'))
-# print('Dev Set Accuracy After: ', model.get_accuracy(snli, 'dev'))
-
-# plt.figure()
-# plt.plot(np.arange(len(model.costs)), model.costs)
-# plt.show()
+print('Dev set accuracy: ', count / float(len(data)))
