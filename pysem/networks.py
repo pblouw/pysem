@@ -111,56 +111,6 @@ class MLP(Model):
         self.get_activations(x)
         return self.node_to_label[int(np.argmax(self.yo, axis=0))]
 
-    def get_accuracy(self, snli, dataset):
-
-        snli.extractor = snli.get_xy_pairs
-
-        def tally(data):
-            # Turn batches into arrays
-            self.bsize = len(data)
-
-            # prems = [s[0][0] for s in data]
-            # hyps = [s[0][1] for s in data]
-            # targs = [s[1] for s in data]
-
-            # prem_bag = BoW.transform(prems).toarray().T
-            # prem_bag = np.vstack((np.ones(len(data)), prem_bag))
-
-            # hyp_bag = BoW.transform(hyps).toarray().T
-            # inp_bag = np.vstack((prem_bag, hyp_bag))
-
-            # targs = self.binarize(targs)
-
-            # correct = sum(np.equal(self.predict(inp_bag),
-            #               np.argmax(targs, axis=0)))
-
-            return correct
-
-        if dataset == 'dev':
-            data = {d for d in snli.dev_data if d[1] != '-'}
-            self.bsize = len(data)
-            return tally(data) / float(self.bsize)
-
-        if dataset == 'train':
-            correct = 0
-            bsize = 10000
-            for _ in range(55):
-                data = []
-                for __ in range(bsize):
-                    try:
-                        while True:
-                            x = next(snli.train_data)
-                            if x[1] != '-':
-                                break
-                        data.append(x)
-                    except:
-                        break
-                correct += tally(data)
-
-            snli.extractor = snli.get_xy_pairs
-            return correct / float(len({d for d in snli.train_data
-                                   if d[1] != '-'}))
-
     @staticmethod
     def binarize(label_list):
         lookup = {'entailment': 0, 'neutral': 1, 'contradiction': 2, '-': 1}
