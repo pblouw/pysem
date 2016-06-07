@@ -152,9 +152,9 @@ class DependencyNetwork(Model):
             self.depset = pickle.load(pfile)
 
     def initialize_weights(self, eps=0.1):
-        self.weights = {'token': np.random.random((self.dim,
-                        len(self.vocab)))*eps*2-eps}
-        self.wgrads['token'] = np.zeros((self.dim, len(self.vocab)))
+        self.weights = defaultdict(zeros(self.dim))
+        self.embeddings = {word: np.random.random((self.dim, 1)) *
+                           eps * 2 - eps for word in self.vocab}
         for dep in self.depset:
             self.weights[dep] = self.gaussian_id(self.dim)
 
@@ -171,10 +171,12 @@ class DependencyNetwork(Model):
             token.gradient = (token.gradient /
                               np.linalg.norm(token.gradient)) * 5
 
-    def update_word_embeddings(self):
+    def update_embeddings(self):
         for token in self.tree:
-            one_hot = self.one_hot(token)
-            self.wgrads['token'] += np.outer(token.gradient, one_hot)
+            try:
+                self.embeddings[token.lower_] += -self.rate * token.gradient
+            except KeyError:
+                pass
 
     def compute_gradients(self):
         for token in self.tree:
@@ -205,7 +207,7 @@ class DependencyNetwork(Model):
 
         grads_computed = [t.computed for t in self.tree]
         if all(grads_computed):
-            self.update_word_embeddings()
+            self.update_embeddings()
             return
         else:
             self.compute_gradients()
@@ -218,6 +220,7 @@ class DependencyNetwork(Model):
         self.reset_comp_graph()
 
     def backward_pass(self, error_grad, rate=0.35):
+        self.rate = rate
         self.set_root_gradient(error_grad)
         self.compute_gradients()
 
@@ -225,7 +228,6 @@ class DependencyNetwork(Model):
             self.weights[dep] += -rate * self.wgrads[dep]
 
         self.wgrads = defaultdict(zeros(self.dim))
-        self.wgrads['token'] = np.zeros((self.dim, len(self.vocab)))
         self.reset_comp_graph()
         self.reset_embeddings()
 
@@ -245,7 +247,7 @@ class DependencyNetwork(Model):
 
     def embed(self, token, children=list()):
         try:
-            emb = np.dot(self.weights['token'], self.one_hot(token))
+            emb = self.embeddings[token.lower_]
         except KeyError:
             emb = np.zeros(self.dim).reshape((self.dim, 1))
 
@@ -299,17 +301,38 @@ classifier = MLP(di=400, dh=400, do=3)
 data = [d for d in snli.dev_data if d[1] != '-']
 data = random.sample(data, 500)
 
-iters = 1
+
+def compute_accuracy(data):
+    count = 0
+    for sample in data:
+        s1 = sample[0][0]
+        s2 = sample[0][1]
+        label = sample[1]
+
+        s1_depnet.forward_pass(s1)
+        s2_depnet.forward_pass(s2)
+
+        bias = np.ones(1).reshape(1, 1)
+        s1 = s1_depnet.get_sentence_embedding()
+        s2 = s2_depnet.get_sentence_embedding()
+
+        xs = np.concatenate((bias, s1, s2))
+        prediction = classifier.predict(xs)
+        if prediction == label:
+            count += 1
+
+    print('Dev set accuracy: ', count / float(len(data)))
+
+iters = 20
 rate = 0.1
 counter = 0
 for _ in range(iters):
     print('On training iteration ', _)
-    # samples = random.sample(data, 5000)
     if _ == 0.6 * iters:
         rate = 0.05
         print('Dropped rate to ', rate)
     if _ == 0.8 * iters:
-        rate = 0.025
+        rate = 0.01
         print('Dropped rate to ', rate)
 
     for sample in data:
@@ -325,8 +348,6 @@ for _ in range(iters):
         s1 = s1_depnet.get_sentence_embedding()
         s2 = s2_depnet.get_sentence_embedding()
 
-        # print(bias.shape, s1.shape, s2.shape)
-
         xs = np.concatenate((bias, s1, s2))
         ys = label
 
@@ -336,31 +357,5 @@ for _ in range(iters):
 
         s1_depnet.backward_pass(s1_grad, rate=rate)
         s2_depnet.backward_pass(s2_grad, rate=rate)
-    counter += 1
-    # print(classifier.predict(xs))
-    # print(label)
 
-print('Calculating accuracies')
-snli._reset_streams()
-snli.extractor = snli.get_xy_pairs
-
-# data = [d for d in snli.dev_data if d[1] != '-']
-count = 0
-for sample in data:
-    s1 = sample[0][0]
-    s2 = sample[0][1]
-    label = sample[1]
-
-    s1_depnet.forward_pass(s1)
-    s2_depnet.forward_pass(s2)
-
-    bias = np.ones(1).reshape(1, 1)
-    s1 = s1_depnet.get_sentence_embedding()
-    s2 = s2_depnet.get_sentence_embedding()
-
-    xs = np.concatenate((bias, s1, s2))
-    prediction = classifier.predict(xs)
-    if prediction == label:
-        count += 1
-
-print('Dev set accuracy: ', count / float(len(data)))
+    compute_accuracy(data)
