@@ -296,10 +296,10 @@ snli.load_vocab('snli_words')
 s1_depnet = DependencyNetwork(embedding_dim=200, vocab=snli.vocab)
 s2_depnet = DependencyNetwork(embedding_dim=200, vocab=snli.vocab)
 
-classifier = MLP(di=400, dh=400, do=3)
+classifier = MLP(di=400, dh=800, do=3)
 
 data = [d for d in snli.dev_data if d[1] != '-']
-data = random.sample(data, 500)
+data = random.sample(data, 1000)
 
 
 def compute_accuracy(data):
@@ -323,16 +323,13 @@ def compute_accuracy(data):
 
     print('Dev set accuracy: ', count / float(len(data)))
 
-iters = 20
-rate = 0.1
+iters = 160
+rate = 0.08
 counter = 0
 for _ in range(iters):
     print('On training iteration ', _)
-    if _ == 0.6 * iters:
-        rate = 0.05
-        print('Dropped rate to ', rate)
-    if _ == 0.8 * iters:
-        rate = 0.01
+    if _ % 20 == 0 and _ != 0:
+        rate = rate / 2.0
         print('Dropped rate to ', rate)
 
     for sample in data:
