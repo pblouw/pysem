@@ -2,6 +2,7 @@ import pickle
 import spacy
 import platform
 import random
+import time
 
 import numpy as np
 
@@ -43,6 +44,11 @@ def zeros(dim):
     def func():
         return np.zeros((dim, dim))
     return func
+
+
+def normalize(v):
+    if np.linalg.norm(v) > 0:
+        return v / np.linalg.norm(v)
 
 
 class MLP(Model):
@@ -151,7 +157,7 @@ class DependencyNetwork(Model):
         with open(path, 'rb') as pfile:
             self.depset = pickle.load(pfile)
 
-    def initialize_weights(self, eps=0.1):
+    def initialize_weights(self, eps=0.2):
         self.weights = defaultdict(zeros(self.dim))
         self.embeddings = {word: np.random.random((self.dim, 1)) *
                            eps * 2 - eps for word in self.vocab}
@@ -293,17 +299,20 @@ snli = SNLI(snlipath)
 snli.extractor = snli.get_xy_pairs
 snli.load_vocab('snli_words')
 
-s1_depnet = DependencyNetwork(embedding_dim=200, vocab=snli.vocab)
-s2_depnet = DependencyNetwork(embedding_dim=200, vocab=snli.vocab)
+dim = 50
 
-classifier = MLP(di=400, dh=800, do=3)
+s1_depnet = DependencyNetwork(embedding_dim=dim, vocab=snli.vocab)
+s2_depnet = DependencyNetwork(embedding_dim=dim, vocab=snli.vocab)
+
+classifier = MLP(di=2*dim, dh=dim, do=3)
 
 data = [d for d in snli.dev_data if d[1] != '-']
-data = random.sample(data, 1000)
+data = random.sample(data, 100)
 
 
 def compute_accuracy(data):
     count = 0
+    detvec_1 = normalize(s1_depnet.weights['det'].flatten())
     for sample in data:
         s1 = sample[0][0]
         s2 = sample[0][1]
@@ -321,14 +330,20 @@ def compute_accuracy(data):
         if prediction == label:
             count += 1
 
+    detvec_2 = normalize(s1_depnet.weights['det'].flatten())
+    cosine = np.dot(detvec_1, detvec_2)
     print('Dev set accuracy: ', count / float(len(data)))
+    print('Cosine of DET weights across updates: ', cosine)
 
-iters = 160
-rate = 0.08
+
+start_time = time.time()
+
+iters = 50
+rate = 0.1
 counter = 0
 for _ in range(iters):
     print('On training iteration ', _)
-    if _ % 20 == 0 and _ != 0:
+    if _ % 5 == 0 and _ != 0:
         rate = rate / 2.0
         print('Dropped rate to ', rate)
 
@@ -349,10 +364,12 @@ for _ in range(iters):
         ys = label
 
         classifier.train(xs, ys, iters=1, rate=rate)
-        s1_grad = classifier.yi_grad[1:201]
-        s2_grad = classifier.yi_grad[201:]
+        s1_grad = classifier.yi_grad[1:dim+1]
+        s2_grad = classifier.yi_grad[dim+1:]
 
         s1_depnet.backward_pass(s1_grad, rate=rate)
         s2_depnet.backward_pass(s2_grad, rate=rate)
 
     compute_accuracy(data)
+
+print('Total runtime: ', time.time() - start_time)
