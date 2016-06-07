@@ -6,8 +6,8 @@ import numpy as np
 import multiprocessing as mp
 
 from collections import defaultdict
-from .hrr import Vocabulary, HRR
-from .mputils import apply_async
+from hrr import Vocabulary, HRR
+from mputils import apply_async
 
 tokenizer = nltk.load('tokenizers/punkt/english.pickle')
 stopwords = nltk.corpus.stopwords.words('english')
@@ -181,7 +181,9 @@ class RandomIndexing(EmbeddingModel):
         self.wordlist = wordlist
         self.flags = flags
         self.batchsize = batchsize
-
+        self.word_to_index = {word: idx for idx, word in enumerate(wordlist)}
+        self.index_to_word = {idx: word for idx, word in enumerate(wordlist)}
+        
         global vocab
         vocab = Vocabulary(dim, wordlist)
 
