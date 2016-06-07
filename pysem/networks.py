@@ -194,6 +194,7 @@ class DependencyNetwork(Model):
 
                 children = self.get_children(token)
 
+                print(token.dep_ + ' norm ', np.linalg.norm(token.gradient))
                 if np.isnan(token.gradient).any():
                     raise ValueError('NaN encountered')
 
