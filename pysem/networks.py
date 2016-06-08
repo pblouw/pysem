@@ -1,12 +1,12 @@
 import pickle
 import spacy
 import platform
-import random
+# import random
 import time
 
 import numpy as np
 
-from collections import defaultdict
+from collections import defaultdict, Counter
 from handlers import SNLI
 from spacy_utils import TokenWrapper
 
@@ -20,12 +20,18 @@ else:
     cachepath = '/Users/peterblouw/cache/'
 
 
+parser = spacy.load('en')
+
+
 class Model(object):
     """
     """
     @staticmethod
     def sigmoid(x):
         return 1.0 / (1 + np.exp(-x))
+
+    def sigmoid_grad(self, x):
+        return self.sigmoid(x) * (1 - self.sigmoid(x))
 
     @staticmethod
     def tanh(x):
@@ -49,6 +55,25 @@ def zeros(dim):
 def normalize(v):
     if np.linalg.norm(v) > 0:
         return v / np.linalg.norm(v)
+
+
+def most_common_dep(data):
+    depcount = Counter()
+    for sample in data:
+        s1 = sample[0][0]
+        s2 = sample[0][1]
+        parse1 = parser(s1)
+        parse2 = parser(s2)
+
+        for token in parse1:
+            if token.dep_ != 'ROOT':
+                depcount[token.dep_] += 1
+
+        for token in parse2:
+            if token.dep_ != 'ROOT':
+                depcount[token.dep_] += 1
+
+    return depcount.most_common(1)[0][0]
 
 
 class MLP(Model):
@@ -133,7 +158,7 @@ class DependencyNetwork(Model):
         self.dim = embedding_dim
         self.vocab = sorted(vocab)
         self.indices = {wrd: idx for idx, wrd in enumerate(self.vocab)}
-        self.parser = spacy.load('en')
+        self.parser = parser
         self.load_dependencies('dependencies.pickle')
         self.wgrads = defaultdict(zeros(self.dim))
         self.initialize_weights()
@@ -159,8 +184,8 @@ class DependencyNetwork(Model):
 
     def initialize_weights(self, eps=0.2):
         self.weights = defaultdict(zeros(self.dim))
-        self.embeddings = {word: np.random.random((self.dim, 1)) *
-                           eps * 2 - eps for word in self.vocab}
+        self.vectors = {word: np.random.random((self.dim, 1)) *
+                        eps * 2 - eps for word in self.vocab}
         for dep in self.depset:
             self.weights[dep] = self.gaussian_id(self.dim)
 
@@ -172,6 +197,15 @@ class DependencyNetwork(Model):
         for token in self.tree:
             token._embedding = None
 
+    def reset_gradients(self):
+        for token in self.tree:
+            token._gradient = None
+
+    def reset_all(self):
+        self.reset_embeddings()
+        self.reset_comp_graph()
+        self.reset_gradients()
+
     def clip_gradient(self, token):
         if np.linalg.norm(token.gradient) > 5:
             token.gradient = (token.gradient /
@@ -180,7 +214,7 @@ class DependencyNetwork(Model):
     def update_embeddings(self):
         for token in self.tree:
             try:
-                self.embeddings[token.lower_] += -self.rate * token.gradient
+                self.vectors[token.lower_] += -self.rate * token.gradient
             except KeyError:
                 pass
 
@@ -194,14 +228,12 @@ class DependencyNetwork(Model):
 
                 children = self.get_children(token)
 
-                print(token.dep_ + ' norm ', np.linalg.norm(token.gradient))
                 if np.isnan(token.gradient).any():
                     raise ValueError('NaN encountered')
 
                 for child in children:
                     if child.gradient is not None:
                         continue
-
                     self.wgrads[child.dep_] += np.outer(token.gradient,
                                                         child.embedding)
                     child.gradient = np.dot(self.weights[child.dep_].T,
@@ -237,6 +269,7 @@ class DependencyNetwork(Model):
         self.wgrads = defaultdict(zeros(self.dim))
         self.reset_comp_graph()
         self.reset_embeddings()
+        self.reset_gradients()
 
     def get_children(self, token):
         children = []
@@ -252,14 +285,15 @@ class DependencyNetwork(Model):
         else:
             return True
 
-    def embed(self, token, children=list()):
+    def embed(self, token, children=False):
         try:
-            emb = self.embeddings[token.lower_]
+            emb = np.copy(self.vectors[token.lower_])
         except KeyError:
             emb = np.zeros(self.dim).reshape((self.dim, 1))
 
-        for child in children:
-            emb += np.dot(self.weights[child.dep_], child.embedding)
+        if children:
+            for child in children:
+                emb += np.dot(self.weights[child.dep_], child.embedding)
 
         token.embedding = self.tanh(emb)
         token.computed = True
@@ -300,20 +334,21 @@ snli = SNLI(snlipath)
 snli.extractor = snli.get_xy_pairs
 snli.load_vocab('snli_words')
 
-dim = 50
+dim = 100
+iters = 15
+rate = 0.01
 
 s1_depnet = DependencyNetwork(embedding_dim=dim, vocab=snli.vocab)
 s2_depnet = DependencyNetwork(embedding_dim=dim, vocab=snli.vocab)
 
-classifier = MLP(di=2*dim, dh=dim, do=3)
+classifier = MLP(di=2*dim, dh=100, do=3)
 
 data = [d for d in snli.dev_data if d[1] != '-']
-data = random.sample(data, 100)
+dep = most_common_dep(data)
 
 
 def compute_accuracy(data):
     count = 0
-    detvec_1 = normalize(s1_depnet.weights['det'].flatten())
     for sample in data:
         s1 = sample[0][0]
         s2 = sample[0][1]
@@ -331,23 +366,18 @@ def compute_accuracy(data):
         if prediction == label:
             count += 1
 
-    detvec_2 = normalize(s1_depnet.weights['det'].flatten())
-    cosine = np.dot(detvec_1, detvec_2)
     print('Dev set accuracy: ', count / float(len(data)))
-    print('Cosine of DET weights across updates: ', cosine)
-
 
 start_time = time.time()
 
-iters = 50
-rate = 0.1
-counter = 0
 for _ in range(iters):
     print('On training iteration ', _)
     if _ % 5 == 0 and _ != 0:
         rate = rate / 2.0
         print('Dropped rate to ', rate)
 
+    depvec_1 = normalize(s1_depnet.weights[dep].flatten())
+    logist_1 = normalize(classifier.w2.flatten())
     for sample in data:
 
         s1 = sample[0][0]
@@ -364,7 +394,7 @@ for _ in range(iters):
         xs = np.concatenate((bias, s1, s2))
         ys = label
 
-        classifier.train(xs, ys, iters=1, rate=rate)
+        classifier.train(xs, ys, iters=1, rate=0.01)
         s1_grad = classifier.yi_grad[1:dim+1]
         s2_grad = classifier.yi_grad[dim+1:]
 
@@ -372,5 +402,12 @@ for _ in range(iters):
         s2_depnet.backward_pass(s2_grad, rate=rate)
 
     compute_accuracy(data)
+
+    depvec_2 = normalize(s1_depnet.weights[dep].flatten())
+    logist_2 = normalize(classifier.w2.flatten())
+    cosine_log = np.dot(logist_1, logist_2)
+    cosine_dep = np.dot(depvec_1, depvec_2)
+    print('Cosine of dep weights across updates: ', cosine_dep)
+    print('Cosine of classifier weights across update: ', cosine_log)
 
 print('Total runtime: ', time.time() - start_time)
