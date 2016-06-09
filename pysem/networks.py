@@ -1,7 +1,7 @@
 import pickle
 import spacy
 import platform
-# import random
+import random
 import time
 
 import numpy as np
@@ -334,17 +334,19 @@ snli = SNLI(snlipath)
 snli.extractor = snli.get_xy_pairs
 snli.load_vocab('snli_words')
 
-dim = 100
-iters = 15
-rate = 0.01
+dim = 200
+iters = 200
+rate = 0.02
 
 s1_depnet = DependencyNetwork(embedding_dim=dim, vocab=snli.vocab)
 s2_depnet = DependencyNetwork(embedding_dim=dim, vocab=snli.vocab)
 
-classifier = MLP(di=2*dim, dh=100, do=3)
+classifier = MLP(di=2*dim, dh=400, do=3)
 
-data = [d for d in snli.dev_data if d[1] != '-']
-dep = most_common_dep(data)
+train_data = [d for d in snli.train_data if d[1] != '-']
+dev_data = [d for d in snli.dev_data if d[1] != '-']
+
+dep = most_common_dep(train_data)
 
 
 def compute_accuracy(data):
@@ -371,14 +373,19 @@ def compute_accuracy(data):
 start_time = time.time()
 
 for _ in range(iters):
+    batch = random.sample(train_data, 40000)
     print('On training iteration ', _)
-    if _ % 5 == 0 and _ != 0:
+    if _ % 25 == 0 and _ != 0:
         rate = rate / 2.0
         print('Dropped rate to ', rate)
 
+    if rate < 0.0005:
+        rate = 0.0005
+
     depvec_1 = normalize(s1_depnet.weights[dep].flatten())
     logist_1 = normalize(classifier.w2.flatten())
-    for sample in data:
+
+    for sample in batch:
 
         s1 = sample[0][0]
         s2 = sample[0][1]
@@ -394,14 +401,14 @@ for _ in range(iters):
         xs = np.concatenate((bias, s1, s2))
         ys = label
 
-        classifier.train(xs, ys, iters=1, rate=0.01)
+        classifier.train(xs, ys, iters=1, rate=rate/2.0)
         s1_grad = classifier.yi_grad[1:dim+1]
         s2_grad = classifier.yi_grad[dim+1:]
 
         s1_depnet.backward_pass(s1_grad, rate=rate)
         s2_depnet.backward_pass(s2_grad, rate=rate)
 
-    compute_accuracy(data)
+    compute_accuracy(dev_data)
 
     depvec_2 = normalize(s1_depnet.weights[dep].flatten())
     logist_2 = normalize(classifier.w2.flatten())
