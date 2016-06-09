@@ -1,24 +1,10 @@
 import pickle
 import spacy
-import platform
-import random
-import time
 
 import numpy as np
 
 from collections import defaultdict, Counter
-from handlers import SNLI
 from spacy_utils import TokenWrapper
-
-if platform.system() == 'Linux':
-    snlipath = '/home/pblouw/corpora/snli_1.0/'
-    wikipath = '/home/pblouw/corpora/wikipedia'
-    cachepath = '/home/pblouw/cache/'
-else:
-    snlipath = '/Users/peterblouw/corpora/snli_1.0/'
-    wikipath = '/Users/peterblouw/corpora/wikipedia'
-    cachepath = '/Users/peterblouw/cache/'
-
 
 parser = spacy.load('en')
 
@@ -95,8 +81,8 @@ class MLP(Model):
     """
     def __init__(self, di, dh, do, eps=0.1):
         temp = dh
-        self.w1 = np.random.random((temp, di+1))*eps*2-eps
-        self.w2 = np.random.random((do, dh+1))*eps*2-eps
+        self.w1 = np.random.random((temp, di+1)) * eps * 2 - eps
+        self.w2 = np.random.random((do, dh+1)) * eps * 2 - eps
         self.costs = []
         self.bsize = 1
         self.node_to_label = {0: 'entailment', 1: 'neutral',
@@ -120,7 +106,7 @@ class MLP(Model):
 
             # Compute gradients
             yo_grad = self.yo-self.targ_bag
-            yh_grad = np.dot(self.w2.T, yo_grad)*self.tanh_grad(self.yh)
+            yh_grad = np.dot(self.w2.T, yo_grad) * self.tanh_grad(self.yh)
             w2_grad = np.dot(yo_grad, self.yh.T) / self.bsize
             w1_grad = np.dot(yh_grad[1:, :], xs.T) / self.bsize
 
@@ -228,9 +214,6 @@ class DependencyNetwork(Model):
 
                 children = self.get_children(token)
 
-                if np.isnan(token.gradient).any():
-                    raise ValueError('NaN encountered')
-
                 for child in children:
                     if child.gradient is not None:
                         continue
@@ -328,93 +311,3 @@ class DependencyNetwork(Model):
         for token in self.tree:
             if token.head.idx == token.idx:
                 return token.embedding
-
-
-snli = SNLI(snlipath)
-snli.extractor = snli.get_xy_pairs
-snli.load_vocab('snli_words')
-
-dim = 200
-iters = 200
-rate = 0.02
-
-s1_depnet = DependencyNetwork(embedding_dim=dim, vocab=snli.vocab)
-s2_depnet = DependencyNetwork(embedding_dim=dim, vocab=snli.vocab)
-
-classifier = MLP(di=2*dim, dh=400, do=3)
-
-train_data = [d for d in snli.train_data if d[1] != '-']
-dev_data = [d for d in snli.dev_data if d[1] != '-']
-
-dep = most_common_dep(train_data)
-
-
-def compute_accuracy(data):
-    count = 0
-    for sample in data:
-        s1 = sample[0][0]
-        s2 = sample[0][1]
-        label = sample[1]
-
-        s1_depnet.forward_pass(s1)
-        s2_depnet.forward_pass(s2)
-
-        bias = np.ones(1).reshape(1, 1)
-        s1 = s1_depnet.get_sentence_embedding()
-        s2 = s2_depnet.get_sentence_embedding()
-
-        xs = np.concatenate((bias, s1, s2))
-        prediction = classifier.predict(xs)
-        if prediction == label:
-            count += 1
-
-    print('Dev set accuracy: ', count / float(len(data)))
-
-start_time = time.time()
-
-for _ in range(iters):
-    batch = random.sample(train_data, 40000)
-    print('On training iteration ', _)
-    if _ % 25 == 0 and _ != 0:
-        rate = rate / 2.0
-        print('Dropped rate to ', rate)
-
-    if rate < 0.0005:
-        rate = 0.0005
-
-    depvec_1 = normalize(s1_depnet.weights[dep].flatten())
-    logist_1 = normalize(classifier.w2.flatten())
-
-    for sample in batch:
-
-        s1 = sample[0][0]
-        s2 = sample[0][1]
-        label = sample[1]
-
-        s1_depnet.forward_pass(s1)
-        s2_depnet.forward_pass(s2)
-
-        bias = np.ones(1).reshape(1, 1)
-        s1 = s1_depnet.get_sentence_embedding()
-        s2 = s2_depnet.get_sentence_embedding()
-
-        xs = np.concatenate((bias, s1, s2))
-        ys = label
-
-        classifier.train(xs, ys, iters=1, rate=rate/2.0)
-        s1_grad = classifier.yi_grad[1:dim+1]
-        s2_grad = classifier.yi_grad[dim+1:]
-
-        s1_depnet.backward_pass(s1_grad, rate=rate)
-        s2_depnet.backward_pass(s2_grad, rate=rate)
-
-    compute_accuracy(dev_data)
-
-    depvec_2 = normalize(s1_depnet.weights[dep].flatten())
-    logist_2 = normalize(classifier.w2.flatten())
-    cosine_log = np.dot(logist_1, logist_2)
-    cosine_dep = np.dot(depvec_1, depvec_2)
-    print('Cosine of dep weights across updates: ', cosine_dep)
-    print('Cosine of classifier weights across update: ', cosine_log)
-
-print('Total runtime: ', time.time() - start_time)
