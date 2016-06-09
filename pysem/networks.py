@@ -146,6 +146,7 @@ class DependencyNetwork(Model):
         self.indices = {wrd: idx for idx, wrd in enumerate(self.vocab)}
         self.parser = parser
         self.load_dependencies('dependencies.pickle')
+        self.load_vecs('snli_vecs.pickle')
         self.wgrads = defaultdict(zeros(self.dim))
         self.initialize_weights()
 
@@ -168,10 +169,17 @@ class DependencyNetwork(Model):
         with open(path, 'rb') as pfile:
             self.depset = pickle.load(pfile)
 
+    def load_vecs(self, path):
+        with open(path, 'rb') as pfile:
+            self.snli_vecs = pickle.load(pfile)
+
     def initialize_weights(self, eps=0.2):
         self.weights = defaultdict(zeros(self.dim))
-        self.vectors = {word: np.random.random((self.dim, 1)) *
-                        eps * 2 - eps for word in self.vocab}
+        # self.vectors = {word: np.random.random((self.dim, 1)) *
+                        # eps * 2 - eps for word in self.vocab}
+        self.vectors = {word: self.snli_vecs[word].reshape(self.dim, 1)
+                        for word in self.vocab}
+
         for dep in self.depset:
             self.weights[dep] = self.gaussian_id(self.dim)
 
