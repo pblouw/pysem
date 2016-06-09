@@ -176,7 +176,7 @@ class DependencyNetwork(Model):
     def initialize_weights(self, eps=0.2):
         self.weights = defaultdict(zeros(self.dim))
         # self.vectors = {word: np.random.random((self.dim, 1)) *
-                        # eps * 2 - eps for word in self.vocab}
+        #                 eps * 2 - eps for word in self.vocab}
         self.vectors = {word: self.snli_vecs[word].reshape(self.dim, 1)
                         for word in self.vocab}
 
