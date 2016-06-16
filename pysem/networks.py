@@ -43,25 +43,6 @@ def normalize(v):
         return v / np.linalg.norm(v)
 
 
-def most_common_dep(data):
-    depcount = Counter()
-    for sample in data:
-        s1 = sample[0][0]
-        s2 = sample[0][1]
-        parse1 = parser(s1)
-        parse2 = parser(s2)
-
-        for token in parse1:
-            if token.dep_ != 'ROOT':
-                depcount[token.dep_] += 1
-
-        for token in parse2:
-            if token.dep_ != 'ROOT':
-                depcount[token.dep_] += 1
-
-    return depcount.most_common(1)[0][0]
-
-
 class MLP(Model):
     """
     A multilayer perceptron performing classification.
@@ -85,13 +66,29 @@ class MLP(Model):
         self.w2 = np.random.random((do, dh+1)) * eps * 2 - eps
         self.costs = []
         self.bsize = 1
-        self.node_to_label = {0: 'entailment', 1: 'neutral',
-                              2: 'contradiction'}
+    
+    @property
+    def label_dict(self):
+        return self._label_dict
+
+    @label_dict.setter
+    def label_dict(self, l_dict):
+        if not isinstance(l_dict, dict):
+            raise TypeError('Label Dict must be a dictionary')
+        else:
+            self._label_dict = l_dict
+
+    @property
+    def nonlinearity(self):
+        return self._nonlinearity
+    
+    @nonlinearity.setter
+    def nonlinearity(self, activation_func):
+        self._nonlinearity = activation_func
 
     def get_activations(self, x):
         self.yh = self.tanh(np.dot(self.w1, x))
         self.yh = np.vstack((np.ones(self.bsize), self.yh))
-
         self.yo = self.softmax(np.dot(self.w2, self.yh))
 
     def train(self, xs, ys, iters, bsize=1, rate=0.35):
@@ -99,14 +96,14 @@ class MLP(Model):
         xs = np.reshape(xs, (len(xs), 1))
 
         for _ in range(iters):
-            self.targ_bag = self.binarize([ys])
-
+            self.ys = ys
             # Compute activations
             self.get_activations(xs)
 
             # Compute gradients
-            yo_grad = self.yo-self.targ_bag
+            yo_grad = self.yo-self.ys
             yh_grad = np.dot(self.w2.T, yo_grad) * self.tanh_grad(self.yh)
+            
             w2_grad = np.dot(yo_grad, self.yh.T) / self.bsize
             w1_grad = np.dot(yh_grad[1:, :], xs.T) / self.bsize
 
@@ -121,21 +118,12 @@ class MLP(Model):
             self.costs.append(self.get_cost())
 
     def get_cost(self):
-        return np.sum(-np.log(self.yo) * self.targ_bag) / float(self.bsize)
+        return np.sum(-np.log(self.yo) * self.ys) / float(self.bsize)
 
     def predict(self, x):
         x = np.reshape(x, (len(x), 1))
         self.get_activations(x)
-        return self.node_to_label[int(np.argmax(self.yo, axis=0))]
-
-    @staticmethod
-    def binarize(label_list):
-        lookup = {'entailment': 0, 'neutral': 1, 'contradiction': 2, '-': 1}
-        y_idx = [lookup[l] for l in label_list]
-        x_idx = range(len(label_list))
-        vals = np.zeros((3, len(label_list)))
-        vals[y_idx, x_idx] = 1
-        return vals
+        return self.label_dict[int(np.argmax(self.yo, axis=0))]
 
 
 class DependencyNetwork(Model):
@@ -146,7 +134,7 @@ class DependencyNetwork(Model):
         self.indices = {wrd: idx for idx, wrd in enumerate(self.vocab)}
         self.parser = parser
         self.load_dependencies('dependencies.pickle')
-        self.load_vecs('snli_vecs.pickle')
+        # self.load_vecs('snli_vecs.pickle')
         self.wgrads = defaultdict(zeros(self.dim))
         self.initialize_weights()
 
@@ -175,10 +163,10 @@ class DependencyNetwork(Model):
 
     def initialize_weights(self, eps=0.2):
         self.weights = defaultdict(zeros(self.dim))
-        # self.vectors = {word: np.random.random((self.dim, 1)) *
-        #                 eps * 2 - eps for word in self.vocab}
-        self.vectors = {word: self.snli_vecs[word].reshape(self.dim, 1)
-                        for word in self.vocab}
+        self.vectors = {word: np.random.random((self.dim, 1)) *
+                        eps * 2 - eps for word in self.vocab}
+        # self.vectors = {word: self.snli_vecs[word].reshape(self.dim, 1)
+                        # for word in self.vocab}
 
         for dep in self.depset:
             self.weights[dep] = self.gaussian_id(self.dim)
