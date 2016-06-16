@@ -3,7 +3,7 @@ import spacy
 
 import numpy as np
 
-from collections import defaultdict, Counter
+from collections import defaultdict
 from spacy_utils import TokenWrapper
 
 parser = spacy.load('en')
@@ -66,7 +66,7 @@ class MLP(Model):
         self.w2 = np.random.random((do, dh+1)) * eps * 2 - eps
         self.costs = []
         self.bsize = 1
-    
+
     @property
     def label_dict(self):
         return self._label_dict
@@ -79,15 +79,23 @@ class MLP(Model):
             self._label_dict = l_dict
 
     @property
-    def nonlinearity(self):
-        return self._nonlinearity
-    
-    @nonlinearity.setter
-    def nonlinearity(self, activation_func):
-        self._nonlinearity = activation_func
+    def nl(self):
+        return self._nl
+
+    @nl.setter
+    def nl(self, act_func):
+        self._nl = act_func
+
+    @property
+    def nl_grad(self):
+        return self._nl_grad
+
+    @nl_grad.setter
+    def nl_grad(self, grad_func):
+        self._nl_grad = grad_func
 
     def get_activations(self, x):
-        self.yh = self.tanh(np.dot(self.w1, x))
+        self.yh = self.nl(np.dot(self.w1, x))
         self.yh = np.vstack((np.ones(self.bsize), self.yh))
         self.yo = self.softmax(np.dot(self.w2, self.yh))
 
@@ -102,8 +110,8 @@ class MLP(Model):
 
             # Compute gradients
             yo_grad = self.yo-self.ys
-            yh_grad = np.dot(self.w2.T, yo_grad) * self.tanh_grad(self.yh)
-            
+            yh_grad = np.dot(self.w2.T, yo_grad) * self.nl_grad(self.yh)
+
             w2_grad = np.dot(yo_grad, self.yh.T) / self.bsize
             w1_grad = np.dot(yh_grad[1:, :], xs.T) / self.bsize
 
@@ -166,7 +174,7 @@ class DependencyNetwork(Model):
         self.vectors = {word: np.random.random((self.dim, 1)) *
                         eps * 2 - eps for word in self.vocab}
         # self.vectors = {word: self.snli_vecs[word].reshape(self.dim, 1)
-                        # for word in self.vocab}
+        #                 for word in self.vocab}
 
         for dep in self.depset:
             self.weights[dep] = self.gaussian_id(self.dim)
