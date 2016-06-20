@@ -1,5 +1,6 @@
 import pickle
 import spacy
+import string
 
 import numpy as np
 
@@ -7,6 +8,7 @@ from collections import defaultdict
 from spacy_utils import TokenWrapper
 
 parser = spacy.load('en')
+punc_translator = str.maketrans({key: None for key in string.punctuation})
 
 
 class Model(object):
@@ -132,6 +134,86 @@ class MLP(Model):
         x = np.reshape(x, (len(x), 1))
         self.get_activations(x)
         return self.label_dict[int(np.argmax(self.yo, axis=0))]
+
+
+class RNN(Model):
+    def __init__(self, vocab, dim, eps=0.05):
+        self.dim = dim
+        # Randomly initialize the three weight matrices
+        self.wx = np.random.random((dim, len(vocab)))*eps*2-eps
+        self.wh = np.random.random((dim, dim))*eps*2-eps
+        self.xs, self.hs, self.ys = {}, {}, {}
+        self.bh = np.zeros(dim)
+        self.vocab = vocab
+
+        self.wrd_to_ind = {word: idx for idx, word in enumerate(vocab)}
+        self.ind_to_wrd = {idx: word for idx, word in enumerate(vocab)}
+
+    def get_onehot(self, ind):
+        onehot = np.zeros(len(self.vocab))
+        onehot[ind] = 1
+        return onehot
+
+    def set_root_gradient(self, grad):
+        self.root_grad = grad
+
+    def get_activities(self, seq_in):
+        self.hs[-1] = np.zeros(len(self.wh))
+        for t in range(len(seq_in)):
+            self.xs[t] = self.get_onehot(seq_in[t])
+            self.hs[t] = np.tanh(np.dot(self.wx, self.xs[t]) +
+                                 np.dot(self.wh, self.hs[t-1])+self.bh)
+
+            self.ys[t] = np.tanh(self.hs[t])
+
+    def forward_pass(self, sequence):
+        self.sequence = [s.lower() for s in sequence.split() if
+                         s.lower() in self.vocab]
+        self.sequence = [s.translate(punc_translator) for s in self.sequence]
+        self.sequence = [s for s in self.sequence if s in self.vocab]
+        print([s in self.vocab for s in self.sequence])
+        print(self.sequence)
+        xs = np.array([self.wrd_to_ind[word] for word in self.sequence])
+        self.get_activities(xs)
+
+    def backward_pass(self, error_grad, rate=0.3):
+        self.set_root_gradient(error_grad)
+
+        wx_grad = np.zeros_like(self.wx)
+        wh_grad = np.zeros_like(self.wh)
+        bh_grad = np.zeros_like(self.bh)
+
+        h_grads = {}
+        h_grads[len(self.sequence)] = np.zeros(self.dim)
+
+        for _ in reversed(range(len(self.sequence))):
+            if _ == len(self.sequence) - 1:
+                h_grads[_] = self.root_grad.flatten() * (1 - self.ys[_]**2)
+            else:
+                h_grads[_] = np.dot(self.wh.T, h_grads[_+1])
+                h_grads[_] = h_grads[_] * (1 - self.hs[_]**2)
+                wx_grad += np.outer(h_grads[_], self.xs[_])
+                wh_grad += np.outer(h_grads[_+1], self.hs[_])
+                bh_grad += h_grads[_]
+
+        grads = [wx_grad, wh_grad, bh_grad]
+
+        # Clip gradients to avoid explosions
+        for _ in range(len(grads)):
+            if np.linalg.norm(grads[_]) > 5:
+                grads[_] = 5 * grads[_] / np.linalg.norm(grads[_])
+
+        wx_grad = grads[0]
+        wh_grad = grads[1]
+        bh_grad = grads[2]
+
+        self.wx += -rate * wx_grad
+        self.wh += -rate * wh_grad
+        self.bh += -rate * bh_grad
+
+    def get_sentence_embedding(self):
+        print(len(self.ys))
+        return self.ys[len(self.sequence)-1]
 
 
 class DependencyNetwork(Model):
