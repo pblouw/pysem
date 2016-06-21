@@ -3,10 +3,12 @@ import re
 import json
 import nltk
 import pickle
+import itertools
+
 import numpy as np
 
 from collections import Counter
-from pysem.mputils import apply_async, wiki_cache, count_words
+from pysem.mputils import apply_async, starmap, count_words
 
 tokenizer = nltk.load('tokenizers/punkt/english.pickle')
 
@@ -53,6 +55,21 @@ class Wikipedia(DataHandler):
         self.from_cache = from_cache
         self._reset_streams()
 
+    @staticmethod
+    def preprocess(article):
+        '''Perform basic preprocessing on a Wikipedia article'''
+        article = re.sub("<.*>|<|>", "", article)
+        article = article.split('\n')[3:]  # removes title from 1st sentence
+        article = ' '.join(article)
+        return article
+
+    @staticmethod
+    def cache(articles, process, path):
+        '''Caches modified Wikipedia articles in a specified directory'''
+        with open(path, 'w') as cachefile:
+            for article in articles:
+                cachefile.write(process(article) + '</doc>')
+
     def _reset_streams(self):
         self.article_count = 0
         self.batches = self._batches()
@@ -87,27 +104,21 @@ class Wikipedia(DataHandler):
             for s in sents:
                 yield s
 
-    def write_to_cache(self, path, processor, n_per_file=200, pool_size=10):
-        '''Write batches of preprocessed articles to cache for later use'''
+    def write_to_cache(self, path, process, n_per_file=200, pool_size=10):
+        '''Write batches of processed articles to cache for later use'''
         paramlist = []
-        batch = []
-        count = 0
+        for count in itertools.count(0):
+            batch = list(itertools.islice(self.articles, n_per_file))
+            fname = str(count) + '.txt'
+            paramlist.append((batch, process, path + fname))
 
-        for article in self.articles:
-            batch.append(article)
-
-            if len(batch) == n_per_file:
-                fname = str(count) + '.txt'
-                paramlist.append((batch, path + fname, processor))
-                batch = []
-                count += 1
-
-            if len(paramlist) == pool_size:
-                apply_async(wiki_cache, paramlist)
+            if count % pool_size == 0 and count != 0:
+                starmap(self.cache, paramlist)
                 paramlist = []
 
-        if len(paramlist) != 0:
-            apply_async(wiki_cache, paramlist)
+            elif len(batch) < n_per_file:
+                starmap(self.cache, paramlist)
+                break
 
         self._reset_streams()
 
@@ -124,14 +135,6 @@ class Wikipedia(DataHandler):
         self.vocab = counter.most_common(int(len(counter)*cutoff))
         self.vocab = sorted([pair[0] for pair in self.vocab])
         self._reset_streams()
-
-    @staticmethod
-    def preprocess(document):
-        '''Perform basic preprocessing on a Wikipedia document'''
-        document = re.sub("<.*>|<|>", "", document)
-        document = document.split('\n')[3:]
-        document = ' '.join(document)
-        return document
 
 
 class SNLI(DataHandler):

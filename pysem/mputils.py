@@ -11,6 +11,16 @@ punc_translator = str.maketrans({key: None for key in string.punctuation})
 num_translator = str.maketrans({key: None for key in '1234567890'})
 
 
+def starmap(func, paramlist):
+    acc = []
+    cpus = mp.cpu_count()
+    pool = mp.Pool(processes=cpus)
+    for result in pool.starmap_async(func, paramlist).get():
+        acc.append(result)
+    pool.close()
+    return acc
+
+
 def apply_async(func, paramlist):
     acc = []
     cpus = mp.cpu_count()

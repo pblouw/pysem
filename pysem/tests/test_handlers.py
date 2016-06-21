@@ -37,7 +37,7 @@ def test_caching(tmpdir):
     cache_path = str(tmpdir) + '/'
 
     wp = Wikipedia(corpus_path)
-    wp.write_to_cache(cache_path, processor=max_strip, n_per_file=1)
+    wp.write_to_cache(cache_path, process=max_strip, n_per_file=1)
 
     wp_cache = Wikipedia(cache_path, from_cache=True)
     article = next(wp_cache.articles)
