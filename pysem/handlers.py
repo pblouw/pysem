@@ -6,7 +6,7 @@ import pickle
 import numpy as np
 
 from collections import Counter
-from .mputils import apply_async, wiki_cache, count_words
+from pysem.mputils import apply_async, wiki_cache, count_words
 
 tokenizer = nltk.load('tokenizers/punkt/english.pickle')
 

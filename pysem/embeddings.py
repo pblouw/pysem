@@ -6,8 +6,8 @@ import numpy as np
 import multiprocessing as mp
 
 from collections import defaultdict
-from .hrr import Vocabulary, HRR
-from .mputils import apply_async
+from pysem.hrr import Vocabulary, HRR
+from pysem.mputils import apply_async
 
 tokenizer = nltk.load('tokenizers/punkt/english.pickle')
 stopwords = nltk.corpus.stopwords.words('english')
@@ -16,8 +16,8 @@ vocab = None
 
 nlp = spacy.load('en')
 
-deps = dict()
-deps['VERB'] = set(['nsubj', 'dobj'])
+# deps = dict()
+# deps['VERB'] = set(['nsubj', 'dobj'])
 
 
 def zeros():
@@ -30,18 +30,18 @@ class EmbeddingModel(object):
         pass
 
     def rank_words(self, dotproducts, n=5):
-        scores = zip(range(len(vocab.wordlist)), dotproducts)
+        scores = zip(range(len(self.wordlist)), dotproducts)
         ranked = sorted(scores, key=operator.itemgetter(1), reverse=True)
-        top_n = [(vocab.index_to_word[x[0]], x[1]) for x in ranked[:n]]
+        top_n = [(self.index_to_word[x[0]], x[1]) for x in ranked[:n]]
         for pair in top_n:
             print(pair[0], pair[1])
 
     def get_nearest(self, word):
-        probe = self.context_vectors[vocab.word_to_index[word], :]
+        probe = self.context_vectors[self.word_to_index[word], :]
         self.rank_words(np.dot(self.context_vectors, probe))
 
     def get_completions(self, word, position):
-        v = self.order_vectors[vocab.word_to_index[word], :]
+        v = self.order_vectors[self.word_to_index[word], :]
         if position > 0:
             probe = vocab.deconvolve(vocab.pos_i[position-1], v)
         if position < 0:
@@ -49,7 +49,7 @@ class EmbeddingModel(object):
         self.rank_words(np.dot(vocab.vectors, probe))
 
     def get_verb_neighbor(self, word, dep):
-        v = self.syntax_vectors[vocab.word_to_index[word], :]
+        v = self.syntax_vectors[self.word_to_index[word], :]
         probe = vocab.deconvolve(vocab.verb_deps[dep], v)
         self.rank_words(np.dot(vocab.vectors, probe))
 

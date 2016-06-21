@@ -14,5 +14,6 @@ script:
   - python -m nltk.downloader punkt
   - python -m nltk.downloader stopwords
   - python -m spacy.en.download
+  - python setup.py install
   - flake8 pysem
   - py.test

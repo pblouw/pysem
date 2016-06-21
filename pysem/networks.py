@@ -5,7 +5,7 @@ import string
 import numpy as np
 
 from collections import defaultdict
-from spacy_utils import TokenWrapper
+from pysem.spacy_utils import TokenWrapper
 
 parser = spacy.load('en')
 punc_translator = str.maketrans({key: None for key in string.punctuation})
