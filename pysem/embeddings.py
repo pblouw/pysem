@@ -7,7 +7,7 @@ import multiprocessing as mp
 
 from collections import defaultdict
 from pysem.hrr import Vocabulary, HRR
-from pysem.mputils import apply_async
+from pysem.mputils import plainmap
 
 tokenizer = nltk.load('tokenizers/punkt/english.pickle')
 stopwords = nltk.corpus.stopwords.words('english')
@@ -15,9 +15,6 @@ stopwords = nltk.corpus.stopwords.words('english')
 vocab = None
 
 nlp = spacy.load('en')
-
-# deps = dict()
-# deps['VERB'] = set(['nsubj', 'dobj'])
 
 
 def zeros():
@@ -119,7 +116,6 @@ class RandomIndexing(EmbeddingModel):
                         dep = c.dep_
 
                         if pos == 'VERB' and dep in vocab.verb_deps:
-                            # print(c.orth_, dep, word)
                             role = vocab.verb_deps[dep]
                             orth = c.orth_.lower()
                             if orth in vocab.wordlist:
@@ -133,7 +129,7 @@ class RandomIndexing(EmbeddingModel):
             self.lookup[flag](batch)
 
     def _encode_all(self, batch):
-        sents = apply_async(self._preprocess, batch)
+        sents = plainmap(self._preprocess, batch)
         sents = [lst for lst in sents if len(lst) > 1]
         self._run_pool(self._encode_syntax, batch, self.syntax_vectors)
         self._run_pool(self._encode_context, sents, self.context_vectors)
@@ -150,11 +146,11 @@ class RandomIndexing(EmbeddingModel):
         return encoding
 
     def _update_context_vectors(self, batch):
-        sents = apply_async(self._preprocess, batch)
+        sents = plainmap(self._preprocess, batch)
         self._run_pool(self._encode_context, sents, self.context_vectors)
 
     def _update_order_vectors(self, batch):
-        sents = apply_async(self._preprocess, batch)
+        sents = plainmap(self._preprocess, batch)
         self._run_pool(self._encode_order, sents, self.order_vectors)
 
     def _update_syntax_vectors(self, batch):

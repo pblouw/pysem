@@ -8,7 +8,7 @@ import itertools
 
 from collections import Counter
 from itertools import islice
-from pysem.mputils import apply_async, starmap, count_words
+from pysem.mputils import plainmap, starmap, count_words
 
 tokenizer = nltk.load('tokenizers/punkt/english.pickle')
 
@@ -89,7 +89,7 @@ class Wikipedia(DataHandler):
         counter = Counter()
         while True:
             batch = list(islice(self.articles, batchsize))
-            for counts in apply_async(count_words, batch):
+            for counts in plainmap(count_words, batch):
                 counter.update(counts)
             if len(batch) < batchsize:
                 break

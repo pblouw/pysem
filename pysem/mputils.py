@@ -13,21 +13,17 @@ num_translator = str.maketrans({key: None for key in '1234567890'})
 
 def starmap(func, paramlist):
     acc = []
-    cpus = mp.cpu_count()
-    pool = mp.Pool(processes=cpus)
-    for result in pool.starmap_async(func, paramlist).get():
-        acc.append(result)
-    pool.close()
+    with mp.Pool(processes=mp.cpu_count()) as pool:
+        for result in pool.starmap_async(func, paramlist).get():
+            acc.append(result)
     return acc
 
 
-def apply_async(func, paramlist):
+def plainmap(func, paramlist):
     acc = []
-    cpus = mp.cpu_count()
-    pool = mp.Pool(processes=cpus)
-    for result in pool.map_async(func, paramlist).get():
-        acc.append(result)
-    pool.close()
+    with mp.Pool(processes=mp.cpu_count()) as pool:
+        for result in pool.map_async(func, paramlist).get():
+            acc.append(result)
     return acc
 
 
@@ -40,14 +36,6 @@ def flatten(lst):
         else:
             acc.append(item)
     return acc
-
-
-def wiki_cache(params):
-    '''Caches processed Wikipedia articles in a specified directory'''
-    articles, cachepath, preprocessor = params
-    with open(cachepath, 'w') as cachefile:
-        for article in articles:
-            cachefile.write(preprocessor(article) + '</doc>')
 
 
 def basic_strip(article):
@@ -67,6 +55,7 @@ def max_strip(article):
 
 
 def count_words(article):
+    '''Builds a dictionary of word counts for an article'''
     counts = collections.Counter()
     sen_list = tokenizer.tokenize(article)
     sen_list = [s.replace('\n', ' ') for s in sen_list]
