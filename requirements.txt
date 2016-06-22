@@ -1,3 +1,4 @@
+codecov
 nltk
 flake8
 numpy

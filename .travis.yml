@@ -17,3 +17,6 @@ script:
   - python setup.py install
   - flake8 pysem
   - py.test
+
+after_success:
+  codecov
