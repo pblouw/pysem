@@ -2,7 +2,8 @@
   :target: https://travis-ci.org/pblouw/pysem
   :alt: Travis-CI build status
 
-[![codecov](https://codecov.io/gh/pblouw/pysem/branch/master/graph/badge.svg?token=FdhAk7v0S0)](https://codecov.io/gh/pblouw/pysem)
+.. image:: https://codecov.io/gh/pblouw/pysem/branch/master/graph/badge.svg?token=FdhAk7v0S0
+  :target: https://codecov.io/gh/pblouw/pysem
 
 *******************************************
 PySem: Natural Language Semantics in Python
