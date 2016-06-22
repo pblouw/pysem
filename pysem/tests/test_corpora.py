@@ -105,3 +105,36 @@ def test_snli_vocab_build():
     assert isinstance(snli.vocab, list)
     assert isinstance(random.choice(snli.vocab), str)
     assert len(snli.vocab) > 100
+
+
+def test_snli_extractors():
+    snli = SNLI(snli_path)
+    snli.extractor = snli.get_xy_pairs
+
+    xy_pair = next(snli.dev_data)
+
+    assert isinstance(xy_pair, tuple)
+    assert isinstance(xy_pair[0], tuple)
+    assert isinstance(random.choice(xy_pair[0]), str)
+    assert isinstance(random.choice(xy_pair[1]), str)
+
+    snli.extractor = snli.get_sentences
+    sentences = next(snli.dev_data)
+
+    assert isinstance(sentences, tuple)
+    assert isinstance(random.choice(sentences), str)
+
+    snli.extractor = snli.get_text
+    test_text = snli.test_data
+
+    assert isinstance(test_text, str)
+
+    snli.extractor = snli.get_parses
+    parses = next(snli.train_data)
+
+    assert isinstance(parses, tuple)
+
+    snli.extractor = snli.get_binary_parses
+    parses = next(snli.train_data)
+
+    assert isinstance(parses, tuple)
