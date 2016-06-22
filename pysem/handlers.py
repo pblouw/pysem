@@ -182,7 +182,7 @@ class SNLI(DataHandler):
 
     @test_data.setter
     def test_data(self, dummy):
-        raise Exception('SNL test data is readonly and cannot be modified')
+        raise Exception('SNLI test data is readonly and cannot be modified')
 
     @property
     def train_data(self):
@@ -190,7 +190,7 @@ class SNLI(DataHandler):
 
     @train_data.setter
     def train_data(self, dummy):
-        raise Exception('SNL train data is readonly and cannot be modified')
+        raise Exception('SNLI train data is readonly and cannot be modified')
 
     @property
     def extractor(self):
