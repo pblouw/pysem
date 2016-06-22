@@ -2,7 +2,7 @@
   :target: https://travis-ci.org/pblouw/pysem
   :alt: Travis-CI build status
 
-.. image:: https://codecov.io/gh/pblouw/pysem/branch/master/graph/badge.svg?token=fa1c3214-e108-4cac-91ff-37fb20ee3b7e
+.. image:: https://codecov.io/gh/pblouw/pysem/branch/master/graph/badge.svg?token=FdhAk7v0S0
   :target: https://codecov.io/gh/pblouw/pysem
 
 *******************************************
