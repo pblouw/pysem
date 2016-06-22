@@ -1,7 +1,7 @@
 import os
 import numpy as np
 
-from pysem.handlers import Wikipedia
+from pysem.corpora import Wikipedia
 from pysem.embeddings import RandomIndexing
 
 corpus_path = os.getcwd() + '/pysem/tests/corpora/'

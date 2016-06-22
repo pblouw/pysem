@@ -244,7 +244,7 @@ class SNLI(DataHandler):
         '''Extract and build a vocab from all text in the corpus'''
         self.extractor = self.get_text
         text = self.train_data + self.dev_data + self.test_data
-        self.vocab = set(nltk.word_tokenize(text))
+        self.vocab = sorted(list(set(nltk.word_tokenize(text))))
         self.reset_streams()
 
     def reset_streams(self, func=lambda x: x):
