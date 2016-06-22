@@ -1,4 +1,5 @@
 codecov
+coverage
 nltk
 flake8
 numpy
