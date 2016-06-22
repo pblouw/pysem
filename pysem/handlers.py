@@ -1,13 +1,13 @@
 import os
 import re
 import json
+import sys
 import nltk
 import pickle
 import itertools
 
-import numpy as np
-
 from collections import Counter
+from itertools import islice
 from pysem.mputils import apply_async, starmap, count_words
 
 tokenizer = nltk.load('tokenizers/punkt/english.pickle')
@@ -19,7 +19,7 @@ class DataHandler(object):
         self.path = path
         self._reset_streams()
 
-    def _reset_streams(self):
+    def reset(self):
         raise Exception('DataHandlers must implement a reset method')
 
     def save_vocab(self, filename):
@@ -51,9 +51,17 @@ class Wikipedia(DataHandler):
     """
     def __init__(self, path, article_limit=None, from_cache=False):
         self.path = path
-        self.article_limit = article_limit if article_limit else np.inf
+        self.article_limit = article_limit if article_limit else sys.maxsize
         self.from_cache = from_cache
-        self._reset_streams()
+        self.reset()
+
+    @property
+    def articles(self):
+        return self._articles
+
+    @property
+    def sentences(self):
+        return self._sentences
 
     @staticmethod
     def preprocess(article):
@@ -65,50 +73,17 @@ class Wikipedia(DataHandler):
 
     @staticmethod
     def cache(articles, process, path):
-        '''Caches modified Wikipedia articles in a specified directory'''
+        '''Caches list of modified Wikipedia articles to specified path'''
         with open(path, 'w') as cachefile:
             for article in articles:
                 cachefile.write(process(article) + '</doc>')
-
-    def _reset_streams(self):
-        self.article_count = 0
-        self.batches = self._batches()
-        self.articles = self._articles()
-        self.sentences = self._sentences()
-
-    def _batches(self):
-        for root, dirs, files in os.walk(self.path):
-            for fname in files:
-                fpath = root + '/' + fname
-                with open(fpath, 'r', encoding='ascii', errors='ignore') as f:
-                    articles = f.read().split('</doc>')
-
-                    if not self.from_cache:
-                        articles = [self.preprocess(a) for a in articles]
-
-                    yield [a for a in articles if len(a) > 0]
-
-    def _articles(self):
-        for articles in self._batches():
-            for article in articles:
-                yield article
-
-                self.article_count += 1
-                if self.article_count >= self.article_limit:
-                    raise StopIteration()
-
-    def _sentences(self):
-        for article in self._articles():
-            sents = tokenizer.tokenize(article)
-            sents = [s.replace('\n', '') for s in sents]
-            for s in sents:
-                yield s
 
     def write_to_cache(self, path, process, n_per_file=200, pool_size=10):
         '''Write batches of processed articles to cache for later use'''
         paramlist = []
         for count in itertools.count(0):
-            batch = list(itertools.islice(self.articles, n_per_file))
+
+            batch = list(islice(self.articles, n_per_file))
             fname = str(count) + '.txt'
             paramlist.append((batch, process, path + fname))
 
@@ -120,9 +95,10 @@ class Wikipedia(DataHandler):
                 starmap(self.cache, paramlist)
                 break
 
-        self._reset_streams()
+        self.reset()
 
     def build_vocab(self, cutoff=0.5, batchsize=100):
+        '''Build a vocabularly of words from frequency counts'''
         counter = Counter()
         articles = []
         for article in self.articles:
@@ -134,7 +110,28 @@ class Wikipedia(DataHandler):
 
         self.vocab = counter.most_common(int(len(counter)*cutoff))
         self.vocab = sorted([pair[0] for pair in self.vocab])
-        self._reset_streams()
+        self.reset()
+
+    def reset(self):
+        '''Reset streams to run through entire corpus from the beginning'''
+        self._articles = islice(self._article_gen(), self.article_limit)
+        self._sentences = islice(self._sentence_gen(), self.article_limit)
+
+    def _article_gen(self):
+        for root, dirs, files in os.walk(self.path):
+            for fname in files:
+                fpath = root + '/' + fname
+                with open(fpath, 'r', encoding='ascii', errors='ignore') as f:
+                    articles = f.read().split('</doc>')
+                    for a in articles:
+                        yield a if self.from_cache else self.preprocess(a)
+
+    def _sentence_gen(self):
+        for article in self._article_gen():
+            sents = tokenizer.tokenize(article)
+            sents = [s.replace('\n', '') for s in sents]
+            for s in sents:
+                yield s
 
 
 class SNLI(DataHandler):

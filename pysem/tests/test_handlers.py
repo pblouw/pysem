@@ -1,8 +1,8 @@
 import os
 import re
 import random
-import types
 import pytest
+import itertools
 
 from pysem.handlers import Wikipedia
 from pysem.mputils import max_strip
@@ -13,13 +13,14 @@ corpus_path = os.getcwd() + '/pysem/tests/corpora/'
 def test_streaming():
     wp = Wikipedia(corpus_path)
 
-    assert isinstance(wp.batches, types.GeneratorType)
-    assert isinstance(wp.articles, types.GeneratorType)
-    assert isinstance(wp.sentences, types.GeneratorType)
+    assert isinstance(wp.articles, itertools.islice)
+    assert isinstance(wp.sentences, itertools.islice)
 
-    assert isinstance(next(wp.batches), list)
     assert isinstance(next(wp.articles), str)
     assert isinstance(next(wp.sentences), str)
+
+    all_articles = [a for a in wp.articles]
+    assert len(all_articles) < 100
 
 
 def test_preprocessing():
@@ -37,7 +38,7 @@ def test_caching(tmpdir):
     cache_path = str(tmpdir) + '/'
 
     wp = Wikipedia(corpus_path)
-    wp.write_to_cache(cache_path, process=max_strip, n_per_file=1)
+    wp.write_to_cache(cache_path, process=max_strip, n_per_file=100)
 
     wp_cache = Wikipedia(cache_path, from_cache=True)
     article = next(wp_cache.articles)
@@ -47,7 +48,7 @@ def test_caching(tmpdir):
     assert not pattern.findall(article)
 
     all_cached_articles = [a for a in wp_cache.articles]
-    assert len(all_cached_articles) < 90
+    assert len(all_cached_articles) < 100
 
 
 def test_vocab_build():
@@ -69,7 +70,7 @@ def test_stream_reset():
     with pytest.raises(StopIteration):
         next(wp.articles)
 
-    wp._reset_streams()
+    wp.reset()
     assert isinstance(next(wp.articles), str)
 
 
