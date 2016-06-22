@@ -16,7 +16,7 @@ script:
   - python -m spacy.en.download
   - python setup.py install
   - flake8 pysem
-  - py.test
+  - py.test --cov=./
 
 after_success:
   - bash <(curl -s https://codecov.io/bash) -t fa1c3214-e108-4cac-91ff-37fb20ee3b7e
