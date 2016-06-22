@@ -14,54 +14,60 @@ tokenizer = nltk.load('tokenizers/punkt/english.pickle')
 
 
 class DataHandler(object):
-    """Base class for handling datasets"""
-    def __init__(self, path):
-        self.path = path
-        self._reset_streams()
-
-    def reset(self):
-        raise Exception('DataHandlers must implement a reset method')
-
+    """A base class for handling datasets used in NLP applications"""
     def save_vocab(self, filename):
-        with open(filename + '.pickle', 'wb') as pfile:
+        '''Save a vocabulary to avoid recomputing word counts'''
+        with open(filename, 'wb') as pfile:
             pickle.dump(self.vocab, pfile)
 
     def load_vocab(self, filename):
-        '''Load a vocab that has been previously built'''
-        try:
-            with open(filename + '.pickle', 'rb') as pfile:
+        '''Load a vocabulary that has been previously saved'''
+        with open(filename + '.pickle', 'rb') as pfile:
                 self.vocab = pickle.load(pfile)
-        except:
-            print('No vocab file with that name was found!')
-
-    @property
-    def extractor(self):
-        return self._extractor
-
-    @extractor.setter
-    def extractor(self, func):
-        self._reset_streams(func=func)
-        self._extractor = func
 
 
 class Wikipedia(DataHandler):
-    """
-    Provides various options for processing and handling text from a
-    Wikipedia dump (which must minimally preprocessed to remove HTML).
+    """ A streaming interface to a dump of Wikipedia files. The dump files
+    must be minimally preprocessed to remove html and other forms of
+    markup.
+
+    Parameters:
+    ----------
+    path : str
+        The absolute path to the directory containing the dump files.
+    article_limit : int
+        The maximum number of articles to stream from the dump.
+    from_cache : bool
+        Flag to handle cached articles that have previously been processed.
+
+    Attributes:
+    ----------
+    articles : generator
+        Yields one article at a time until article limit is reached.
+    sentences : generator
+        Yields one sentence at a time until article limit is reached.
     """
     def __init__(self, path, article_limit=None, from_cache=False):
         self.path = path
         self.article_limit = article_limit if article_limit else sys.maxsize
         self.from_cache = from_cache
-        self.reset()
+        self.reset_streams()
 
     @property
     def articles(self):
         return self._articles
 
+    @articles.setter
+    def articles(self, dummy):
+        raise Exception('Articles are readonly and cannot be modified')
+
     @property
     def sentences(self):
         return self._sentences
+
+    @sentences.setter
+    def sentences(self, dummy):
+        raise Exception('Sentences are readonly and cannot be modified')
 
     @staticmethod
     def preprocess(article):
@@ -78,46 +84,44 @@ class Wikipedia(DataHandler):
             for article in articles:
                 cachefile.write(process(article) + '</doc>')
 
-    def write_to_cache(self, path, process, n_per_file=200, pool_size=10):
-        '''Write batches of processed articles to cache for later use'''
+    def build_vocab(self, threshold=0.5, batchsize=100):
+        '''Build a vocabularly of words from word frequency counts'''
+        counter = Counter()
+        while True:
+            batch = list(islice(self.articles, batchsize))
+            for counts in apply_async(count_words, batch):
+                counter.update(counts)
+            if len(batch) < batchsize:
+                break
+
+        self.vocab = counter.most_common(int(len(counter)*threshold))
+        self.vocab = sorted([pair[0] for pair in self.vocab])
+        self.reset_streams()
+
+    def reset_streams(self):
+        '''Reset all generators that stream data from the Wikipedia dump'''
+        self._articles = islice(self._article_stream(), self.article_limit)
+        self._sentences = islice(self._sentence_stream(), self.article_limit)
+
+    def write_to_cache(self, path, process, batchsize=200, poolsize=10):
+        '''Writes processed articles to cache in parallel for later use'''
         paramlist = []
         for count in itertools.count(0):
-
-            batch = list(islice(self.articles, n_per_file))
+            batch = list(islice(self.articles, batchsize))
             fname = str(count) + '.txt'
             paramlist.append((batch, process, path + fname))
 
-            if count % pool_size == 0 and count != 0:
+            if count % poolsize == 0 and count != 0:
                 starmap(self.cache, paramlist)
                 paramlist = []
 
-            elif len(batch) < n_per_file:
+            elif len(batch) < batchsize:
                 starmap(self.cache, paramlist)
                 break
 
-        self.reset()
+        self.reset_streams()
 
-    def build_vocab(self, cutoff=0.5, batchsize=100):
-        '''Build a vocabularly of words from frequency counts'''
-        counter = Counter()
-        articles = []
-        for article in self.articles:
-            articles.append(article)
-            if len(articles) == batchsize:
-                for counts in apply_async(count_words, articles):
-                    counter.update(counts)
-                articles = []
-
-        self.vocab = counter.most_common(int(len(counter)*cutoff))
-        self.vocab = sorted([pair[0] for pair in self.vocab])
-        self.reset()
-
-    def reset(self):
-        '''Reset streams to run through entire corpus from the beginning'''
-        self._articles = islice(self._article_gen(), self.article_limit)
-        self._sentences = islice(self._sentence_gen(), self.article_limit)
-
-    def _article_gen(self):
+    def _article_stream(self):
         for root, dirs, files in os.walk(self.path):
             for fname in files:
                 fpath = root + '/' + fname
@@ -126,8 +130,8 @@ class Wikipedia(DataHandler):
                     for a in articles:
                         yield a if self.from_cache else self.preprocess(a)
 
-    def _sentence_gen(self):
-        for article in self._article_gen():
+    def _sentence_stream(self):
+        for article in self._article_stream():
             sents = tokenizer.tokenize(article)
             sents = [s.replace('\n', '') for s in sents]
             for s in sents:
@@ -135,37 +139,87 @@ class Wikipedia(DataHandler):
 
 
 class SNLI(DataHandler):
-    """Extracts data from the SNLI corpus"""
-    def _reset_streams(self, func=lambda x: x):
-        '''Reset all generators that stream from datasets'''
-        self.train_data = func(self._train_data())
-        self.dev_data = func(self._dev_data())
-        self.test_data = func(self._test_data())
+    """A streaming iterface to the SNLI corpus for natural language inference.
+    The corpus data is provided as a json file, and this interface provides a
+    number of methods for easily extracting particular subsets of the data.
 
-    def _stream(self, filename):
-        with open(self.path + filename) as f:
-            for line in f:
-                yield json.loads(line)
+    Each portion of the dataset is given its own stream, and setting an
+    'extractor' modifies all streams in place to yield some more specific form
+    of data (e.g. x-y pairs, parses, sentences, etc.)
 
-    def _train_data(self):
-        return self._stream('snli_1.0_train.jsonl')
+    Parameters:
+    ----------
+    path : str
+        The absolute path to the directory containing the SNLI corpus.
 
-    def _dev_data(self):
-        return self._stream('snli_1.0_dev.jsonl')
+    Attributes:
+    ----------
+    dev_data : generator
+        Yields one sample at a time from the development set.
+    test_data : generator
+        Yields one sample at a time from the test set.
+    train_data : generator
+        Yield one sample at a time from training set.
+    extractor : function
+        Decorates datastreams to yield more specific outputs. Initialized as
+        the identity function, leaving the datastreams unchanged.
+    """
+    def __init__(self, path):
+        self.path = path
+        self.reset_streams()
 
-    def _test_data(self):
-        return self._stream('snli_1.0_test.jsonl')
+    @property
+    def dev_data(self):
+        return self._dev_data
 
-    def build_vocab(self):
-        '''Extract and build a vocab from all text in the corpus'''
-        self.extractor = self.get_text
-        text = self.train_data + self.dev_data + self.test_data
-        self.vocab = set(nltk.word_tokenize(text))
-        self._reset_streams()
+    @dev_data.setter
+    def dev_data(self, dummy):
+        raise Exception('SNLI dev data is readonly and cannot be modified')
+
+    @property
+    def test_data(self):
+        return self._test_data
+
+    @test_data.setter
+    def test_data(self, dummy):
+        raise Exception('SNL test data is readonly and cannot be modified')
+
+    @property
+    def train_data(self):
+        return self._train_data
+
+    @train_data.setter
+    def train_data(self, dummy):
+        raise Exception('SNL train data is readonly and cannot be modified')
+
+    @property
+    def extractor(self):
+        return self._extractor
+
+    @extractor.setter
+    def extractor(self, func):
+        self.reset_streams(func=func)
+        self._extractor = func
+
+    @staticmethod
+    def get_parses(stream):
+        '''Modifies datastream to yield parses of sentence pairs'''
+        for item in stream:
+            p1 = item['sentence1_parse']
+            p2 = item['sentence2_parse']
+            yield (p1, p2)
+
+    @staticmethod
+    def get_binary_parses(stream):
+        '''Modifies datastream to yield binary parses of sentence pairs'''
+        for item in stream:
+            p1 = item['sentence1_binary_parse']
+            p2 = item['sentence2_binary_parse']
+            yield (p1, p2)
 
     @staticmethod
     def get_text(stream):
-        '''Modifies datastream to extract all text in the stream'''
+        '''Uses datastream to extract and return all text in the stream'''
         acc = []
         for item in stream:
             pair = item['sentence1'] + ' ' + item['sentence2']
@@ -186,18 +240,29 @@ class SNLI(DataHandler):
             y = item['gold_label']
             yield (x, y)
 
-    @staticmethod
-    def get_parses(stream):
-        '''Modifies datastream to yield parses of sentence pairs'''
-        for item in stream:
-            p1 = item['sentence1_parse']
-            p2 = item['sentence2_parse']
-            yield (p1, p2)
+    def build_vocab(self):
+        '''Extract and build a vocab from all text in the corpus'''
+        self.extractor = self.get_text
+        text = self.train_data + self.dev_data + self.test_data
+        self.vocab = set(nltk.word_tokenize(text))
+        self.reset_streams()
 
-    @staticmethod
-    def get_binary_parses(stream):
-        '''Modifies datastream to yield binary parsies of sentence pairs'''
-        for item in stream:
-            p1 = item['sentence1_binary_parse']
-            p2 = item['sentence2_binary_parse']
-            yield (p1, p2)
+    def reset_streams(self, func=lambda x: x):
+        '''Reset all generators that stream data from the SNLI dump'''
+        self._train_data = func(self._train_stream())
+        self._dev_data = func(self._dev_stream())
+        self._test_data = func(self._test_stream())
+
+    def _stream(self, filename):
+        with open(self.path + filename) as f:
+            for line in f:
+                yield json.loads(line)
+
+    def _train_stream(self):
+        return self._stream('snli_1.0_train.jsonl')
+
+    def _dev_stream(self):
+        return self._stream('snli_1.0_dev.jsonl')
+
+    def _test_stream(self):
+        return self._stream('snli_1.0_test.jsonl')

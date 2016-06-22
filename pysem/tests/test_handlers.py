@@ -38,7 +38,7 @@ def test_caching(tmpdir):
     cache_path = str(tmpdir) + '/'
 
     wp = Wikipedia(corpus_path)
-    wp.write_to_cache(cache_path, process=max_strip, n_per_file=100)
+    wp.write_to_cache(cache_path, process=max_strip, batchsize=100)
 
     wp_cache = Wikipedia(cache_path, from_cache=True)
     article = next(wp_cache.articles)
@@ -53,7 +53,7 @@ def test_caching(tmpdir):
 
 def test_vocab_build():
     wp = Wikipedia(corpus_path, article_limit=1)
-    wp.build_vocab(cutoff=0.05, batchsize=1)
+    wp.build_vocab(threshold=0.05, batchsize=1)
 
     assert isinstance(wp.vocab, list)
     assert isinstance(random.choice(wp.vocab), str)
@@ -70,7 +70,7 @@ def test_stream_reset():
     with pytest.raises(StopIteration):
         next(wp.articles)
 
-    wp.reset()
+    wp.reset_streams()
     assert isinstance(next(wp.articles), str)
 
 
