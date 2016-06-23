@@ -22,7 +22,7 @@ class DataHandler(object):
 
     def load_vocab(self, filename):
         '''Load a vocabulary that has been previously saved'''
-        with open(filename + '.pickle', 'rb') as pfile:
+        with open(filename, 'rb') as pfile:
                 self.vocab = pickle.load(pfile)
 
 

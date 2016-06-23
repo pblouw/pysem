@@ -53,7 +53,7 @@ def test_wiki_caching(tmpdir):
     assert len(all_cached_articles) < 100
 
 
-def test_wiki_vocab_build():
+def test_wiki_vocab_build(tmpdir):
     wp = Wikipedia(wiki_path, article_limit=1)
     wp.build_vocab(threshold=0.05, batchsize=1)
 
@@ -61,7 +61,15 @@ def test_wiki_vocab_build():
     assert isinstance(random.choice(wp.vocab), str)
     assert len(wp.vocab) > 100
 
-    assert isinstance(next(wp.articles), str)
+    vocab_path = str(tmpdir) + '/'
+    wp.save_vocab(vocab_path + 'test.pickle')
+
+    wp.vocab = None
+    wp.load_vocab(vocab_path + 'test.pickle')
+
+    assert isinstance(wp.vocab, list)
+    assert isinstance(random.choice(wp.vocab), str)
+    assert len(wp.vocab) > 100
 
 
 def test_wiki_stream_reset():

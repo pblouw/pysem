@@ -39,7 +39,7 @@ def flatten(lst):
 
 
 def basic_strip(article):
-    '''Strips out punctuation and capitalization'''
+    '''Strips out punctuation and very short sentences'''
     sen_list = tokenizer.tokenize(article)
     sen_list = [s.lower() for s in sen_list if len(s) > 5]
     return ' '.join(sen_list)
