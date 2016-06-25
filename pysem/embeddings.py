@@ -1,6 +1,7 @@
 import nltk
 import operator
 import spacy
+import random
 
 import numpy as np
 import multiprocessing as mp
@@ -54,14 +55,24 @@ class EmbeddingModel(object):
 class RandomIndexing(EmbeddingModel):
 
     def __init__(self, corpus):
-        self._corpus = corpus
-        self.cpus = mp.cpu_count()
+        self.corpus = corpus
         self.lookup = {'context': self._update_context_vectors,
                        'order': self._update_order_vectors,
                        'syntax': self._update_syntax_vectors}
 
+    @property
+    def vocab(self):
+        return self._vocab
+
+    @vocab.setter
+    def vocab(self, iterable):
+        if type(iterable) is set and random.choice(tuple(iterable)) is str:
+            self._vocab = iterable
+        else:
+            raise TypeError('The vocabulary must be a set of strings')
+
     @staticmethod
-    def _preprocess(article):
+    def preprocess(article):
         sen_list = tokenizer.tokenize(article)
         sen_list = [s.replace('\n', ' ') for s in sen_list]
         sen_list = [s.translate(vocab.strip_num) for s in sen_list]
@@ -72,7 +83,7 @@ class RandomIndexing(EmbeddingModel):
         return sen_list
 
     @staticmethod
-    def _encode_context(sen_list):
+    def encode_context(sen_list):
         encodings = defaultdict(zeros)
         for sen in sen_list:
             sen_sum = sum([vocab[w].v for w in sen if w not in stopwords])
@@ -82,7 +93,7 @@ class RandomIndexing(EmbeddingModel):
         return encodings
 
     @staticmethod
-    def _encode_order(sen_list):
+    def encode_order(sen_list):
         encodings = defaultdict(zeros)
         win = 5
         for sen in sen_list:
@@ -101,7 +112,7 @@ class RandomIndexing(EmbeddingModel):
         return encodings
 
     @staticmethod
-    def _encode_syntax(article):
+    def encode_syntax(article):
         doc = nlp(article)
         encodings = defaultdict(zeros)
 
@@ -129,11 +140,11 @@ class RandomIndexing(EmbeddingModel):
             self.lookup[flag](batch)
 
     def _encode_all(self, batch):
-        sents = plainmap(self._preprocess, batch)
+        sents = plainmap(self.preprocess, batch)
         sents = [lst for lst in sents if len(lst) > 1]
-        self._run_pool(self._encode_syntax, batch, self.syntax_vectors)
-        self._run_pool(self._encode_context, sents, self.context_vectors)
-        self._run_pool(self._encode_order, sents, self.order_vectors)
+        self._run_pool(self.encode_syntax, batch, self.syntax_vectors)
+        self._run_pool(self.encode_context, sents, self.context_vectors)
+        self._run_pool(self.encode_order, sents, self.order_vectors)
 
     def _normalize_encoding(self, encoding):
         for word in vocab.wordlist:
@@ -146,19 +157,19 @@ class RandomIndexing(EmbeddingModel):
         return encoding
 
     def _update_context_vectors(self, batch):
-        sents = plainmap(self._preprocess, batch)
-        self._run_pool(self._encode_context, sents, self.context_vectors)
+        sents = plainmap(self.preprocess, batch)
+        self._run_pool(self.encode_context, sents, self.context_vectors)
 
     def _update_order_vectors(self, batch):
-        sents = plainmap(self._preprocess, batch)
-        self._run_pool(self._encode_order, sents, self.order_vectors)
+        sents = plainmap(self.preprocess, batch)
+        self._run_pool(self.encode_order, sents, self.order_vectors)
 
     def _update_syntax_vectors(self, batch):
-        self._run_pool(self._encode_syntax, batch, self.syntax_vectors)
+        self._run_pool(self.encode_syntax, batch, self.syntax_vectors)
 
     def _batches(self):
         batch = []
-        for article in self._corpus.articles:
+        for article in self.corpus.articles:
             batch.append(article)
             if len(batch) % self.batchsize == 0 and len(batch) > 0:
                 yield batch
@@ -166,13 +177,13 @@ class RandomIndexing(EmbeddingModel):
         yield batch  # collects leftover articles in a batch < batchsize
 
     def _run_pool(self, function, batch, encoding):
-        with mp.Pool(processes=self.cpus) as pool:
+        with mp.Pool(processes=mp.cpu_count()) as pool:
             result = pool.map_async(function, batch)
             for _ in result.get():
                 for word, vec in _.items():
                     encoding[vocab.word_to_index[word], :] += vec
 
-    def train(self, dim, wordlist, flags=None, batchsize=500):
+    def train(self, dim, wordlist, flags=None, batchsize=100):
         self.dim = dim
         self.wordlist = wordlist
         self.flags = flags
