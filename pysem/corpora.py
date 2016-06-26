@@ -8,7 +8,7 @@ import itertools
 
 from collections import Counter
 from itertools import islice
-from pysem.mputils import plainmap, starmap, count_words
+from pysem.utils.multiprocessing import plainmap, starmap, count_words
 
 tokenizer = nltk.load('tokenizers/punkt/english.pickle')
 
@@ -105,18 +105,18 @@ class Wikipedia(DataHandler):
 
     def write_to_cache(self, path, process, batchsize=200, poolsize=10):
         '''Writes processed articles to cache in parallel for later use'''
-        paramlist = []
+        arglist = []
         for count in itertools.count(0):
             batch = list(islice(self.articles, batchsize))
             fname = str(count) + '.txt'
-            paramlist.append((batch, process, path + fname))
+            arglist.append((batch, process, path + fname))
 
             if count % poolsize == 0 and count != 0:
-                starmap(self.cache, paramlist)
-                paramlist = []
+                starmap(self.cache, arglist)
+                arglist = []
 
             elif len(batch) < batchsize:
-                starmap(self.cache, paramlist)
+                starmap(self.cache, arglist)
                 break
 
         self.reset_streams()

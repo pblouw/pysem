@@ -6,7 +6,7 @@ import types
 import itertools
 
 from pysem.corpora import Wikipedia, SNLI
-from pysem.mputils import max_strip
+from pysem.utils.multiprocessing import max_strip
 
 wiki_path = os.getcwd() + '/pysem/tests/corpora/wikipedia/'
 snli_path = os.getcwd() + '/pysem/tests/corpora/snli/'
