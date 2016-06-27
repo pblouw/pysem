@@ -9,7 +9,7 @@ from pysem.embeddings import ContextEmbedding, OrderEmbedding, SyntaxEmbedding
 corpus_path = os.getcwd() + '/pysem/tests/corpora/wikipedia/'
 
 
-def test_context_embedding():
+def test_context_embedding(capfd):
     wp = Wikipedia(corpus_path, article_limit=1)
     wp.build_vocab(threshold=0.1, batchsize=1)
 
@@ -34,6 +34,10 @@ def test_context_embedding():
     matches = model.top_matches(embedding, n)
     assert len(matches) == n
     assert matches[0][1] > 0.999
+
+    model.get_nearest(random.choice(model.vocab))
+    printout, err = capfd.readouterr()
+    assert isinstance(printout, str)
 
 
 def test_order_embedding(capfd):
