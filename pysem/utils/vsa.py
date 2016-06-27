@@ -2,14 +2,17 @@ import numpy as np
 
 
 def convolve(v1, v2):
+    '''Compute the circular convolution of two vectors'''
     return np.fft.ifft(np.fft.fft(v1) * np.fft.fft(v2)).real
 
 
 def deconvolve(v1, v2):
+    '''Compute the circular correlation of the first vector with the second'''
     return convolve(np.roll(v1[::-1], 1), v2)
 
 
 def normalize(v):
+    '''Normalize a vector to unit length'''
     if np.linalg.norm(v) > 0:
         return v / np.linalg.norm(v)
     else:
@@ -17,6 +20,7 @@ def normalize(v):
 
 
 def unitary_vector(dim):
+    '''Produce a vector whose approximate and exact inverses are equivalent'''
     v = np.random.normal(loc=0, scale=(1/(dim**0.5)), size=dim)
     fft_val = np.fft.fft(v)
     imag = fft_val.imag
@@ -27,7 +31,7 @@ def unitary_vector(dim):
 
 
 class HRR(object):
-
+    """A holographic reduced representation, as defined by Plate (2003)."""
     def __init__(self, vector, unitary=False):
         # self.v = self.normalize(vector)
         self.v = vector

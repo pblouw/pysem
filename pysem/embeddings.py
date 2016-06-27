@@ -24,6 +24,11 @@ class RandomIndexing(object):
     vectors are performed while scanning through text to build up useful
     representations of the words in question.
 
+    Specific random indexing models are subclasses of this class that specify
+    a unique encoding algorithm to be used to train the model. Subclasses also
+    specify model-specific methods for retrieving and manipulating learned
+    embeddings in useful ways.
+
     Parameters:
     ----------
     corpus : datahandler object
@@ -34,11 +39,15 @@ class RandomIndexing(object):
 
     Attributes:
     ----------
+    corpus : datahandler object
+        The text corpus to model using random indexing.
     vocab : list
         A list of strings that define the vocabulary of words to be modelled.
     vectors : numpy.ndarray
         An array whose rows correspond to the learned embeddings for each
-        vocabulary item. Initialized as an array of zeros.
+        vocabulary item. Initialized as an array of zeros when the model is
+        trained. The index of a word in the vocab is the same as the index of
+        the row in the array containing the word's embedding.
     """
     def __init__(self, corpus, vocab):
         self.corpus = corpus
@@ -65,6 +74,7 @@ class RandomIndexing(object):
 
     @staticmethod
     def preprocess(article):
+        '''Convert an article into a list of lowercase sentences'''
         sen_list = tokenizer.tokenize(article)
         sen_list = [s.replace('\n', ' ') for s in sen_list]
         sen_list = [s.translate(readonly.strip_num) for s in sen_list]
@@ -74,7 +84,48 @@ class RandomIndexing(object):
         sen_list = [[w for w in s if w in readonly.vocab] for s in sen_list]
         return sen_list
 
-    def batches(self):
+    def run_pool(self, function, batch):
+        '''Apply an embedding function to batch of articles in parallel'''
+        with mp.Pool(processes=mp.cpu_count()) as pool:
+            results = pool.map_async(function, batch)
+
+            for encoding in results.get():
+                for word, vector in encoding.items():
+                    self.vectors[self.word_to_idx[word], :] += vector
+
+    def train(self, dim, batchsize=100):
+        '''Train a model with embeddings of the specified dimension'''
+        self.dim = dim
+        self.batchsize = batchsize
+        self.vectors = np.zeros((len(self.vocab), dim))
+        self._config_readonly()
+
+        for batch in self._batches():
+            sents = plainmap(self.preprocess, batch)
+            self.run_pool(self.encode, sents)
+
+        self.normalize()
+
+    def normalize(self):
+        '''Normalize the embeddings learned by the model to unit length'''
+        norms = np.linalg.norm(self.vectors, axis=1)
+        norms[norms == 0] = 1  # avoids divide by zero for words w/o embedding
+        self.vectors = np.divide(self.vectors, norms[:, np.newaxis])
+
+    def top_matches(self, probe, n, base_vectors=False):
+        '''Return the top n embeddings matching a probe embedding'''
+        if base_vectors:
+            sims = np.dot(readonly.vectors, probe)
+        else:
+            sims = np.dot(self.vectors, probe)
+        ranked = sorted(enumerate(sims), key=itemgetter(1), reverse=True)
+        return [(self.idx_to_word[x[0]], x[1]) for x in ranked[:n]]
+
+    def _config_readonly(self):
+        global readonly
+        readonly = PoolContainer(self.dim, self.vocab)
+
+    def _batches(self):
         while True:
             batch = list(islice(self.corpus.articles, self.batchsize))
             yield batch
@@ -84,49 +135,14 @@ class RandomIndexing(object):
 
         self.corpus.reset_streams()
 
-    def normalize(self):
-        norms = np.linalg.norm(self.vectors, axis=1)
-        norms[norms == 0] = 1  # avoids divide by zero for words w/o embedding
-        self.vectors = np.divide(self.vectors, norms[:, np.newaxis])
-
-    def run_pool(self, function, batch):
-        with mp.Pool(processes=mp.cpu_count()) as pool:
-            results = pool.map_async(function, batch)
-
-            for encoding in results.get():
-                for word, vector in encoding.items():
-                    self.vectors[self.word_to_idx[word], :] += vector
-
-    def train(self, dim, batchsize=100):
-        self.dim = dim
-        self.batchsize = batchsize
-        self.vectors = np.zeros((len(self.vocab), dim))
-        self.config_readonly()
-
-        for batch in self.batches():
-            sents = plainmap(self.preprocess, batch)
-            self.run_pool(self.encode, sents)
-
-        self.normalize()
-
-    def rank_sims(self, sims, n=5):
-        ranked = sorted(enumerate(sims), key=itemgetter(1), reverse=True)
-        return [(self.idx_to_word[x[0]], x[1]) for x in ranked[:n]]
-
-    def get_nearest(self, word):
-        probe = self.vectors[self.word_to_idx[word], :]
-        self.rank_words(np.dot(self.vectors, probe))
-
-    def config_readonly(self):
-        global readonly
-        readonly = PoolContainer(self.dim, self.vocab)
-
 
 class ContextEmbedding(RandomIndexing):
-    """
+    """A random indexing model that produces word embeddings on the basis of
+    word co-occurences within sentences.
     """
     @staticmethod
     def encode(sen_list):
+        '''Encode context info for each unique word in a list of sentences'''
         encodings = defaultdict(readonly.zeros)
         for sen in sen_list:
             sen_sum = sum([readonly[w].v for w in sen if w not in stopwords])
@@ -135,12 +151,21 @@ class ContextEmbedding(RandomIndexing):
                 encodings[word] += word_sum
         return encodings
 
+    def get_nearest(self, word, n=5):
+        '''Print the n nearest neighbors to a target word in context space'''
+        probe = self.vectors[self.word_to_idx[word], :]
+        top_n = self.top_matches(probe, n)
+        for item in top_n:
+            print(item[0], item[1])
+
 
 class OrderEmbedding(RandomIndexing):
-    """
+    """A random indexing model that produces word embeddings on the basis of
+    positional word co-occurences within sentences.
     """
     @staticmethod
     def encode(sen_list):
+        '''Encode order info for each unique word in a list of sentences'''
         encodings = defaultdict(readonly.zeros)
         win = readonly.winsize
         for sen in sen_list:
@@ -158,22 +183,28 @@ class OrderEmbedding(RandomIndexing):
                 encodings[sen[i]] += o_sum.v
         return encodings
 
-    def config_readonly(self):
+    def get_completions(self, word, position, n=5):
+        '''Print the n most likely words to occur in the specified position
+        relative to the provided target word in order space'''
+        embedding = self.vectors[self.word_to_idx[word], :]
+        if position > 0:
+            probe = deconvolve(readonly.pos_idx[position-1], embedding)
+        else:
+            probe = deconvolve(readonly.neg_idx[abs(position+1)], embedding)
+
+        top_n = self.top_matches(probe, n, base_vectors=True)
+        for item in top_n:
+            print(item[0], item[1])
+
+    def _config_readonly(self):
         global readonly
         readonly = PoolContainer(self.dim, self.vocab)
         readonly.build_position_tags()
 
-    def get_completions(self, word, position):
-        v = self.vectors[self.word_to_idx[word], :]
-        if position > 0:
-            probe = deconvolve(readonly.pos_idx[position-1], v)
-        if position < 0:
-            probe = deconvolve(readonly.neg_idx[abs(position+1)], v)
-        self.rank_words(np.dot(readonly.vectors, probe))
-
 
 class SyntaxEmbedding(RandomIndexing):
-    """
+    """A random indexing model that produces word embeddings on the basis of
+    syntactic dependency relations within sentences.
     """
     @staticmethod
     def encode(article):
@@ -199,7 +230,7 @@ class SyntaxEmbedding(RandomIndexing):
                                 encodings[word] += binding
         return encodings
 
-    def config_readonly(self):
+    def _config_readonly(self):
         global readonly
         readonly = PoolContainer(self.dim, self.vocab)
         readonly.build_dependency_tags()
@@ -208,20 +239,18 @@ class SyntaxEmbedding(RandomIndexing):
         self.dim = dim
         self.batchsize = batchsize
         self.vectors = np.zeros((len(self.vocab), dim))
-        self.config_readonly()
+        self._config_readonly()
 
-        for batch in self.batches():
+        for batch in self._batches():
             self.run_pool(self.encode, batch)
 
         self.normalize()
 
-    def get_verb_neighbor(self, word, dep):
-        v = self.vectors[self.word_to_idx[word], :]
-        probe = deconvolve(readonly.verb_deps[dep], v)
-        self.rank_words(np.dot(readonly.vectors, probe))
-
-
-# class CombinedEmbedding(RandomIndexing):
-
-#     def train(dim, batchsize=100):
-#         self.context_model = ContextEmbedding()
+    def get_verb_neighbors(self, word, dep, n):
+        '''Print the n most likely words to occupy the specified syntactic
+        dependency relative to the provided target word in syntax space'''
+        embedding = self.vectors[self.word_to_idx[word], :]
+        probe = deconvolve(readonly.verb_deps[dep], embedding)
+        top_n = self.top_matches(probe, n, base_vectors=True)
+        for item in top_n:
+            print(item[0], item[1])

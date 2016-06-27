@@ -92,7 +92,7 @@ class PoolContainer(object):
         A constant windowsize to be shared across processes computing
         order embeddings in parallel. Defaults to 5.
     """
-    def __init__(self, dim, vocab, winsize=5):
+    def __init__(self, dim, vocab, winsize=2):
         self.dim = dim
         self.vocab = vocab
         self.winsize = winsize
