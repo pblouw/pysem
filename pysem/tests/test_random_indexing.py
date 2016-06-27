@@ -79,4 +79,3 @@ def test_syntax_embedding(capfd):
 
     printout, err = capfd.readouterr()
     assert isinstance(printout, str)
-
