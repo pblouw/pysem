@@ -27,8 +27,16 @@ def test_context_embedding():
     assert isinstance(encoding, defaultdict)
     assert isinstance(encoding[wp.vocab[0]], np.ndarray)
 
+    word_idx = model.word_to_idx[random.choice(model.vocab)]
+    embedding = model.vectors[word_idx, :]
 
-def test_order_embedding():
+    n = 10
+    matches = model.top_matches(embedding, n)
+    assert len(matches) == n
+    assert matches[0][1] > 0.999
+
+
+def test_order_embedding(capfd):
     wp = Wikipedia(corpus_path, article_limit=1)
     wp.build_vocab(threshold=0.1, batchsize=1)
 
@@ -44,8 +52,14 @@ def test_order_embedding():
     assert isinstance(encoding, defaultdict)
     assert isinstance(encoding[wp.vocab[0]], np.ndarray)
 
+    model.get_completions(random.choice(model.vocab), position=1)
+    model.get_completions(random.choice(model.vocab), position=-1)
 
-def test_syntax_embedding():
+    printout, err = capfd.readouterr()
+    assert isinstance(printout, str)
+
+
+def test_syntax_embedding(capfd):
     wp = Wikipedia(corpus_path, article_limit=1)
     wp.build_vocab(threshold=0.1, batchsize=1)
 
@@ -59,3 +73,10 @@ def test_syntax_embedding():
 
     assert isinstance(encoding, defaultdict)
     assert isinstance(encoding[wp.vocab[0]], np.ndarray)
+
+    model.get_verb_neighbors(random.choice(model.vocab), dep='nsubj')
+    model.get_verb_neighbors(random.choice(model.vocab), dep='dobj')
+
+    printout, err = capfd.readouterr()
+    assert isinstance(printout, str)
+

@@ -246,7 +246,7 @@ class SyntaxEmbedding(RandomIndexing):
 
         self.normalize()
 
-    def get_verb_neighbors(self, word, dep, n):
+    def get_verb_neighbors(self, word, dep, n=5):
         '''Print the n most likely words to occupy the specified syntactic
         dependency relative to the provided target word in syntax space'''
         embedding = self.vectors[self.word_to_idx[word], :]
