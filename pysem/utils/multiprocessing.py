@@ -74,30 +74,55 @@ def count_words(article):
     return counts
 
 
-class PoolData(object):
+class PoolContainer(object):
+    """ A container for readonly data that is shared across processes in a
+    multiprocessing pool. Use of this container object eliminates the need to
+    create a copy of the shared data for each process, which in turn allows
+    for the use of multiprocessing in cases that would otherwise require
+    a prohibitive amount of memory. PoolContainer objects must be defined as
+    global variables to be used with multiprocessing pools.
 
-    def __init__(self, dim, vocab):
-        self.vocab = vocab
+    Parameters:
+    ----------
+    dim : int
+        A constant dimensionality variable to be shared across processes.
+    vocab : list
+        A constant vocabulary of words to be shared across processes.
+    winsize : int
+        A constant windowsize to be shared across processes computing
+        order embeddings in parallel. Defaults to 5.
+    """
+    def __init__(self, dim, vocab, winsize=5):
         self.dim = dim
-        self.vectors = np.random.normal(loc=0, scale=1/dim**0.5,
-                                        size=(len(vocab), dim))
+        self.vocab = vocab
+        self.winsize = winsize
+        self.vectors = np.random.normal(0, 1/dim**0.5, (len(vocab), dim))
 
-        self.word_to_index = {word: idx for idx, word in enumerate(vocab)}
-        self.index_to_word = {idx: word for idx, word in enumerate(vocab)}
+        self.build_text_strippers()
+        self.build_word_maps()
 
+    def __getitem__(self, word):
+        idx = self.word_to_idx[word]
+        return HRR(self.vectors[idx, :])
+
+    def build_dependency_tags(self):
+        deps = set(['nsubj', 'dobj'])
+        self.verb_deps = {dep: unitary_vector(self.dim) for dep in deps}
+
+    def build_position_tags(self):
+        pos_idx = [unitary_vector(self.dim) for i in range(self.winsize)]
+        neg_idx = [unitary_vector(self.dim) for i in range(self.winsize)]
+        self.pos_idx = dict((i, j) for i, j in enumerate(pos_idx))
+        self.neg_idx = dict((i, j) for i, j in enumerate(neg_idx))
+
+    def build_text_strippers(self):
         self.strip_pun = strip_pun
         self.strip_num = strip_num
 
-        deps = set(['nsubj', 'dobj'])
-        self.pos_i = [unitary_vector(self.dim) for i in range(5)]
-        self.neg_i = [unitary_vector(self.dim) for i in range(5)]
-        self.pos_i = dict((i, j) for i, j in enumerate(self.pos_i))
-        self.neg_i = dict((i, j) for i, j in enumerate(self.neg_i))
-        self.verb_deps = {dep: unitary_vector(self.dim) for dep in deps}
-
-    def __getitem__(self, word):
-        index = self.word_to_index[word]
-        return HRR(self.vectors[index, :])
+    def build_word_maps(self):
+        self.word_to_idx = {word: idx for idx, word in enumerate(self.vocab)}
+        self.idx_to_word = {idx: word for idx, word in enumerate(self.vocab)}
 
     def zeros(self):
+        '''Returns an array of zeros for use in initializing defaultdicts'''
         return np.zeros(self.dim)

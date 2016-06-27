@@ -1,5 +1,5 @@
 import nltk
-import operator
+
 import spacy
 import random
 
@@ -8,7 +8,8 @@ import multiprocessing as mp
 
 from collections import defaultdict
 from itertools import islice
-from pysem.utils.multiprocessing import plainmap, PoolData
+from operator import itemgetter
+from pysem.utils.multiprocessing import plainmap, PoolContainer
 from pysem.utils.vsa import convolve, deconvolve, HRR
 
 tokenizer = nltk.load('tokenizers/punkt/english.pickle')
@@ -21,7 +22,7 @@ class RandomIndexing(object):
     algorithms. These algorithms assign random unit vectors to all of the
     words in a vocabulary to be modelled. Then, operations on these unit
     vectors are performed while scanning through text to build up useful
-    representations of the vocabulary items.
+    representations of the words in question.
 
     Parameters:
     ----------
@@ -73,9 +74,19 @@ class RandomIndexing(object):
         sen_list = [[w for w in s if w in readonly.vocab] for s in sen_list]
         return sen_list
 
+    def batches(self):
+        while True:
+            batch = list(islice(self.corpus.articles, self.batchsize))
+            yield batch
+
+            if len(batch) < self.batchsize:
+                break
+
+        self.corpus.reset_streams()
+
     def normalize(self):
         norms = np.linalg.norm(self.vectors, axis=1)
-        norms[norms == 0] = 1
+        norms[norms == 0] = 1  # avoids divide by zero for words w/o embedding
         self.vectors = np.divide(self.vectors, norms[:, np.newaxis])
 
     def run_pool(self, function, batch):
@@ -90,9 +101,7 @@ class RandomIndexing(object):
         self.dim = dim
         self.batchsize = batchsize
         self.vectors = np.zeros((len(self.vocab), dim))
-
-        global readonly
-        readonly = PoolData(dim, self.vocab)
+        self.config_readonly()
 
         for batch in self.batches():
             sents = plainmap(self.preprocess, batch)
@@ -100,30 +109,22 @@ class RandomIndexing(object):
 
         self.normalize()
 
-    def rank_words(self, dotproducts, n=5):
-        scores = zip(range(len(self.vocab)), dotproducts)
-        ranked = sorted(scores, key=operator.itemgetter(1), reverse=True)
-        top_n = [(self.idx_to_word[x[0]], x[1]) for x in ranked[:n]]
-        for pair in top_n:
-            print(pair[0], pair[1])
+    def rank_sims(self, sims, n=5):
+        ranked = sorted(enumerate(sims), key=itemgetter(1), reverse=True)
+        return [(self.idx_to_word[x[0]], x[1]) for x in ranked[:n]]
 
     def get_nearest(self, word):
         probe = self.vectors[self.word_to_idx[word], :]
         self.rank_words(np.dot(self.vectors, probe))
 
-    def batches(self):
-        while True:
-            batch = list(islice(self.corpus.articles, self.batchsize))
-            yield batch
-
-            if len(batch) < self.batchsize:
-                break
-
-        self.corpus.reset_streams()
+    def config_readonly(self):
+        global readonly
+        readonly = PoolContainer(self.dim, self.vocab)
 
 
 class ContextEmbedding(RandomIndexing):
-
+    """
+    """
     @staticmethod
     def encode(sen_list):
         encodings = defaultdict(readonly.zeros)
@@ -136,37 +137,44 @@ class ContextEmbedding(RandomIndexing):
 
 
 class OrderEmbedding(RandomIndexing):
-
+    """
+    """
     @staticmethod
     def encode(sen_list):
         encodings = defaultdict(readonly.zeros)
-        win = 5
+        win = readonly.winsize
         for sen in sen_list:
-            for x in range(len(sen)):
+            for i in range(len(sen)):
                 o_sum = HRR(readonly.zeros())
-                for y in range(win):
-                    if x+y+1 < len(sen):
-                        w = readonly[sen[x+y+1]]
-                        p = HRR(readonly.pos_i[y])
+                for j in range(win):
+                    if i+j+1 < len(sen):
+                        w = readonly[sen[i+j+1]]
+                        p = HRR(readonly.pos_idx[j])
                         o_sum += w * p
-                    if x-y-1 >= 0:
-                        w = readonly[sen[x-y-1]]
-                        p = HRR(readonly.neg_i[y])
+                    if i-j-1 >= 0:
+                        w = readonly[sen[i-j-1]]
+                        p = HRR(readonly.neg_idx[j])
                         o_sum += w * p
-                encodings[sen[x]] += o_sum.v
+                encodings[sen[i]] += o_sum.v
         return encodings
+
+    def config_readonly(self):
+        global readonly
+        readonly = PoolContainer(self.dim, self.vocab)
+        readonly.build_position_tags()
 
     def get_completions(self, word, position):
         v = self.vectors[self.word_to_idx[word], :]
         if position > 0:
-            probe = deconvolve(readonly.pos_i[position-1], v)
+            probe = deconvolve(readonly.pos_idx[position-1], v)
         if position < 0:
-            probe = deconvolve(readonly.neg_i[abs(position+1)], v)
+            probe = deconvolve(readonly.neg_idx[abs(position+1)], v)
         self.rank_words(np.dot(readonly.vectors, probe))
 
 
 class SyntaxEmbedding(RandomIndexing):
-
+    """
+    """
     @staticmethod
     def encode(article):
         doc = nlp(article)
@@ -191,10 +199,16 @@ class SyntaxEmbedding(RandomIndexing):
                                 encodings[word] += binding
         return encodings
 
+    def config_readonly(self):
+        global readonly
+        readonly = PoolContainer(self.dim, self.vocab)
+        readonly.build_dependency_tags()
+
     def train(self, dim, batchsize=100):
         self.dim = dim
         self.batchsize = batchsize
         self.vectors = np.zeros((len(self.vocab), dim))
+        self.config_readonly()
 
         for batch in self.batches():
             self.run_pool(self.encode, batch)
