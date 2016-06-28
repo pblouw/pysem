@@ -5,7 +5,7 @@ import string
 import numpy as np
 
 from collections import defaultdict
-from pysem.spacy_utils import TokenWrapper
+from pysem.utils.spacy import TokenWrapper
 
 parser = spacy.load('en')
 punc_translator = str.maketrans({key: None for key in string.punctuation})
@@ -63,8 +63,7 @@ class MLP(Model):
         [-0.1, 0.1].
     """
     def __init__(self, di, dh, do, eps=0.1):
-        temp = dh
-        self.w1 = np.random.random((temp, di+1)) * eps * 2 - eps
+        self.w1 = np.random.random((dh, di+1)) * eps * 2 - eps
         self.w2 = np.random.random((do, dh+1)) * eps * 2 - eps
         self.costs = []
         self.bsize = 1
@@ -218,13 +217,19 @@ class RNN(Model):
 
 class DependencyNetwork(Model):
 
-    def __init__(self, embedding_dim, vocab):
-        self.dim = embedding_dim
-        self.vocab = sorted(vocab)
+    deps = ['compound', 'punct', 'nsubj', 'ROOT', 'det', 'attr', 'cc',
+            'npadvmod', 'appos', 'prep', 'pobj', 'amod', 'advmod', 'acl',
+            'nsubjpass', 'auxpass', 'agent', 'advcl', 'aux', 'xcomp', 'nmod',
+            'dobj', 'relcl', 'nummod', 'mark', 'pcomp', 'conj', 'poss',
+            'ccomp', 'oprd', 'acomp', 'neg', 'parataxis', 'dep', 'expl',
+            'preconj', 'case', 'dative', 'prt', 'quantmod', 'meta', 'intj',
+            'csubj', 'predet', 'csubjpass']
+
+    def __init__(self, dim, vocab):
+        self.dim = dim
+        self.vocab = vocab
         self.indices = {wrd: idx for idx, wrd in enumerate(self.vocab)}
         self.parser = parser
-        self.load_dependencies('dependencies.pickle')
-        # self.load_vecs('snli_vecs.pickle')
         self.wgrads = defaultdict(zeros(self.dim))
         self.initialize_weights()
 
@@ -245,7 +250,7 @@ class DependencyNetwork(Model):
 
     def load_dependencies(self, path):
         with open(path, 'rb') as pfile:
-            self.depset = pickle.load(pfile)
+            self.deps = pickle.load(pfile)
 
     def load_vecs(self, path):
         with open(path, 'rb') as pfile:
@@ -255,10 +260,8 @@ class DependencyNetwork(Model):
         self.weights = defaultdict(zeros(self.dim))
         self.vectors = {word: np.random.random((self.dim, 1)) *
                         eps * 2 - eps for word in self.vocab}
-        # self.vectors = {word: self.snli_vecs[word].reshape(self.dim, 1)
-        #                 for word in self.vocab}
 
-        for dep in self.depset:
+        for dep in self.deps:
             self.weights[dep] = self.gaussian_id(self.dim)
 
     def reset_comp_graph(self):
@@ -320,10 +323,36 @@ class DependencyNetwork(Model):
         else:
             self.compute_gradients()
 
+    def compute_nodes(self):
+        for token in self.tree:
+            if not token.computed:
+                children = self.get_children(token)
+                children_computed = [child.computed for child in children]
+
+                if all(children_computed):
+                    self.embed(token, children)
+
+        nodes_computed = [token.computed for token in self.tree]
+        if all(nodes_computed):
+            return
+        else:
+            self.compute_nodes()
+
+    def embed(self, token, children=False):
+        try:
+            emb = np.copy(self.vectors[token.lower_])
+        except KeyError:
+            emb = np.zeros(self.dim).reshape((self.dim, 1))
+
+        if children:
+            for child in children:
+                emb += np.dot(self.weights[child.dep_], child.embedding)
+
+        token.embedding = self.tanh(emb)
+        token.computed = True
+
     def forward_pass(self, sentence):
-        self.sentence = sentence
         self.tree = [TokenWrapper(t) for t in self.parser(sentence)]
-        self.compute_leaves()
         self.compute_nodes()
         self.reset_comp_graph()
 
@@ -353,39 +382,6 @@ class DependencyNetwork(Model):
             return False
         else:
             return True
-
-    def embed(self, token, children=False):
-        try:
-            emb = np.copy(self.vectors[token.lower_])
-        except KeyError:
-            emb = np.zeros(self.dim).reshape((self.dim, 1))
-
-        if children:
-            for child in children:
-                emb += np.dot(self.weights[child.dep_], child.embedding)
-
-        token.embedding = self.tanh(emb)
-        token.computed = True
-
-    def compute_leaves(self):
-        for token in self.tree:
-            if not self.has_children(token):
-                self.embed(token)
-
-    def compute_nodes(self):
-        for token in self.tree:
-            if self.has_children(token) and not token.computed:
-                children = self.get_children(token)
-                children_computed = [child.computed for child in children]
-
-                if all(children_computed):
-                    self.embed(token, children)
-
-        nodes_computed = [token.computed for token in self.tree]
-        if all(nodes_computed):
-            return
-        else:
-            self.compute_nodes()
 
     def set_root_gradient(self, grad):
         for token in self.tree:
