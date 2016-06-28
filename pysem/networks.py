@@ -268,19 +268,6 @@ class DependencyNetwork(Model):
         for token in self.tree:
             token.computed = False
 
-    def reset_embeddings(self):
-        for token in self.tree:
-            token._embedding = None
-
-    def reset_gradients(self):
-        for token in self.tree:
-            token._gradient = None
-
-    def reset_all(self):
-        self.reset_embeddings()
-        self.reset_comp_graph()
-        self.reset_gradients()
-
     def clip_gradient(self, token):
         if np.linalg.norm(token.gradient) > 5:
             token.gradient = (token.gradient /
@@ -295,7 +282,7 @@ class DependencyNetwork(Model):
 
     def compute_gradients(self):
         for token in self.tree:
-            if not self.has_children(token):
+            if not bool(token.children):
                 continue
 
             if token.gradient is not None:
@@ -324,35 +311,34 @@ class DependencyNetwork(Model):
             self.compute_gradients()
 
     def compute_nodes(self):
-        for token in self.tree:
-            if not token.computed:
-                children = self.get_children(token)
-                children_computed = [child.computed for child in children]
+        for node in self.tree:
+            if not node.computed:
+                children = self.get_children(node)
+                children_computed = [c.computed for c in children]
 
                 if all(children_computed):
-                    self.embed(token, children)
+                    self.embed(node, children)
 
-        nodes_computed = [token.computed for token in self.tree]
+        nodes_computed = [node.computed for node in self.tree]
         if all(nodes_computed):
             return
         else:
             self.compute_nodes()
 
-    def embed(self, token, children=False):
+    def embed(self, node, children):
         try:
-            emb = np.copy(self.vectors[token.lower_])
+            emb = np.copy(self.vectors[node.lower_])
         except KeyError:
             emb = np.zeros(self.dim).reshape((self.dim, 1))
 
-        if children:
-            for child in children:
-                emb += np.dot(self.weights[child.dep_], child.embedding)
+        for child in children:
+            emb += np.dot(self.weights[child.dep_], child.embedding)
 
-        token.embedding = self.tanh(emb)
-        token.computed = True
+        node.embedding = self.tanh(emb)
+        node.computed = True
 
     def forward_pass(self, sentence):
-        self.tree = [TokenWrapper(t) for t in self.parser(sentence)]
+        self.tree = [TokenWrapper(token) for token in self.parser(sentence)]
         self.compute_nodes()
         self.reset_comp_graph()
 
@@ -366,22 +352,14 @@ class DependencyNetwork(Model):
 
         self.wgrads = defaultdict(zeros(self.dim))
         self.reset_comp_graph()
-        self.reset_embeddings()
-        self.reset_gradients()
 
-    def get_children(self, token):
+    def get_children(self, node):
         children = []
-        for other_token in self.tree:
-            if other_token.idx in [child.idx for child in token.children]:
-                children.append(other_token)
+        for other_node in self.tree:
+            if other_node.idx in [child.idx for child in node.children]:
+                children.append(other_node)
 
         return children
-
-    def has_children(self, token):
-        if list(token.children) == list():
-            return False
-        else:
-            return True
 
     def set_root_gradient(self, grad):
         for token in self.tree:
