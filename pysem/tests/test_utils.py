@@ -1,6 +1,5 @@
 import re
 import os
-import random
 import collections
 
 from pysem.corpora import Wikipedia
@@ -42,10 +41,11 @@ def test_count_words():
 
     assert len(wordset) - ntokens < 500
 
+
 def test_flatten():
     n_nested = 10
-    nest_size = 5 
+    nest_size = 5
     testlist = [list(range(nest_size)) for _ in range(n_nested)]
     flatlist = flatten(testlist)
 
-    assert len(flatlist) == n_nested * nest_size 
+    assert len(flatlist) == n_nested * nest_size
