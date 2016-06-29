@@ -34,15 +34,10 @@ class Model(object):
         return np.exp(x) / np.sum(np.exp(x), axis=0)
 
 
-def zeros(dim):
+def square_zeros(dim):
     def func():
         return np.zeros((dim, dim))
     return func
-
-
-def normalize(v):
-    if np.linalg.norm(v) > 0:
-        return v / np.linalg.norm(v)
 
 
 class MLP(Model):
@@ -225,15 +220,22 @@ class DependencyNetwork(Model):
             'preconj', 'case', 'dative', 'prt', 'quantmod', 'meta', 'intj',
             'csubj', 'predet', 'csubjpass']
 
-    def __init__(self, dim, vocab):
+    def __init__(self, dim, vocab, eps=0.2):
         self.dim = dim
         self.vocab = vocab
         self.indices = {wrd: idx for idx, wrd in enumerate(self.vocab)}
         self.parser = parser
-        self.wgrads = defaultdict(zeros(self.dim))
-        self.initialize_weights()
+        self.weights = defaultdict(square_zeros(self.dim))
+        self.wgrads = defaultdict(square_zeros(self.dim))
+
+        self.vectors = {word: np.random.random((self.dim, 1)) *
+                        eps * 2 - eps for word in self.vocab}
+
+        for dep in self.deps:
+            self.weights[dep] = self.gaussian_id(self.dim)
 
     def one_hot(self, token):
+        '''Converts a spacy token into the correct onehot encoding.'''
         zeros = np.zeros(len(self.vocab))
         try:
             index = self.indices[token.lower_]
@@ -244,88 +246,82 @@ class DependencyNetwork(Model):
 
     @staticmethod
     def gaussian_id(dim):
+        '''Returns an identity matrix with gaussian noise added.'''
         identity = np.eye(dim)
         gaussian = np.random.normal(loc=0, scale=0.05, size=(dim, dim))
         return identity + gaussian
 
-    def load_dependencies(self, path):
-        with open(path, 'rb') as pfile:
-            self.deps = pickle.load(pfile)
-
     def load_vecs(self, path):
+        '''Load pretrained word embeddings for initialization.'''
         with open(path, 'rb') as pfile:
-            self.snli_vecs = pickle.load(pfile)
-
-    def initialize_weights(self, eps=0.2):
-        self.weights = defaultdict(zeros(self.dim))
-        self.vectors = {word: np.random.random((self.dim, 1)) *
-                        eps * 2 - eps for word in self.vocab}
-
-        for dep in self.deps:
-            self.weights[dep] = self.gaussian_id(self.dim)
+            self.vectors = pickle.load(pfile)
 
     def reset_comp_graph(self):
-        for token in self.tree:
-            token.computed = False
+        '''Flag all nodes in the graph as being uncomputed.'''
+        for node in self.tree:
+            node.computed = False
 
-    def clip_gradient(self, token):
-        if np.linalg.norm(token.gradient) > 5:
-            token.gradient = (token.gradient /
-                              np.linalg.norm(token.gradient)) * 5
-
-    def update_embeddings(self):
-        for token in self.tree:
-            try:
-                self.vectors[token.lower_] += -self.rate * token.gradient
-            except KeyError:
-                pass
+    def clip_gradient(self, node, clipval=5):
+        '''Clip a large gradient so that its norm is equal to clipval.'''
+        norm = np.linalg.norm(node.gradient)
+        if norm > clipval:
+            node.gradient = (node.gradient / norm) * 5
 
     def compute_gradients(self):
-        for token in self.tree:
-            if not bool(token.children):
+        '''Compute gradients for every weight matrix and embedding by
+        recursively computing gradients for embeddings and weight matrices
+        whose parents have been computed. Recursion terminates when every
+        embedding and weight matrix has a gradient.'''
+        for node in self.tree:
+            if not self.has_children(node):
                 continue
 
-            if token.gradient is not None:
-                self.clip_gradient(token)
-
-                children = self.get_children(token)
+            if node.computed:
+                self.clip_gradient(node)
+                children = self.get_children(node)
 
                 for child in children:
-                    if child.gradient is not None:
+                    if child.computed:
                         continue
-                    self.wgrads[child.dep_] += np.outer(token.gradient,
-                                                        child.embedding)
-                    child.gradient = np.dot(self.weights[child.dep_].T,
-                                            token.gradient)
-                    nl = self.tanh_grad(child.embedding)
-                    nl = nl.reshape((len(nl), 1))
 
-                    child.gradient = child.gradient * nl
+                    wgrad = np.outer(node.gradient, child.embedding)
+                    cgrad = np.dot(self.weights[child.dep_].T, node.gradient)
+
+                    nlgrad = self.tanh_grad(child.embedding)
+                    nlgrad = nlgrad.reshape((len(nlgrad), 1))
+
+                    self.wgrads[child.dep_] += wgrad
+                    child.gradient = cgrad * nlgrad
                     child.computed = True
 
-        grads_computed = [t.computed for t in self.tree]
-        if all(grads_computed):
-            self.update_embeddings()
+        if all([node.computed for node in self.tree]):
             return
         else:
             self.compute_gradients()
 
-    def compute_nodes(self):
+    def compute_embeddings(self):
+        '''Computes embeddings for all nodes in the graph by recursively
+        computing the embeddings for nodes whose children have all been
+        computed. Recursion terminates when every node has an embedding.'''
         for node in self.tree:
             if not node.computed:
                 children = self.get_children(node)
                 children_computed = [c.computed for c in children]
 
                 if all(children_computed):
-                    self.embed(node, children)
+                    self.embed_node(node, children)
 
         nodes_computed = [node.computed for node in self.tree]
         if all(nodes_computed):
             return
         else:
-            self.compute_nodes()
+            self.compute_embeddings()
 
-    def embed(self, node, children):
+    def embed_node(self, node, children):
+        '''Computes the vector embedding for a node from the vector embeddings
+        of its children. In the case of leaf nodes with no children, the
+        vector for the word corresponding to the leaf node is used as the
+        embedding.'''
         try:
             emb = np.copy(self.vectors[node.lower_])
         except KeyError:
@@ -337,23 +333,40 @@ class DependencyNetwork(Model):
         node.embedding = self.tanh(emb)
         node.computed = True
 
+    def update_word_embeddings(self):
+        '''Use node gradients to update the word embeddings at each node.'''
+        for node in self.tree:
+            try:
+                self.vectors[node.lower_] += -self.rate * node.gradient
+            except KeyError:
+                pass
+
+    def update_weights(self):
+        '''Use weight gradients to update the weights for each dependency,'''
+        for dep in self.wgrads:
+            self.weights[dep] += -self.rate * self.wgrads[dep]
+
+        self.wgrads = defaultdict(square_zeros(self.dim))
+
     def forward_pass(self, sentence):
+        '''Compute activations for every node in the computational graph
+        generated from a dependency parse of the provided sentence.'''
         self.tree = [TokenWrapper(token) for token in self.parser(sentence)]
-        self.compute_nodes()
+        self.compute_embeddings()
         self.reset_comp_graph()
 
     def backward_pass(self, error_grad, rate=0.35):
+        '''Compute gradients for every weight matrix and input word vector
+        used when computing activations in accordance with the comp graph.'''
+        self._set_root_gradient(error_grad)
         self.rate = rate
-        self.set_root_gradient(error_grad)
+
         self.compute_gradients()
-
-        for dep in self.wgrads:
-            self.weights[dep] += -rate * self.wgrads[dep]
-
-        self.wgrads = defaultdict(zeros(self.dim))
-        self.reset_comp_graph()
+        self.update_weights()
+        self.update_word_embeddings()
 
     def get_children(self, node):
+        '''Returns all nodes that are children of the provided node.'''
         children = []
         for other_node in self.tree:
             if other_node.idx in [child.idx for child in node.children]:
@@ -361,13 +374,19 @@ class DependencyNetwork(Model):
 
         return children
 
-    def set_root_gradient(self, grad):
-        for token in self.tree:
-            if token.head.idx == token.idx:
-                token.gradient = grad
-                token.computed = True
+    def has_children(self, node):
+        '''Check if node has children, return False for leaf nodes.'''
+        return bool(node.children)
 
-    def get_sentence_embedding(self):
-        for token in self.tree:
-            if token.head.idx == token.idx:
-                return token.embedding
+    def get_root_embedding(self):
+        '''Returns the embedding for the root node in the tree.'''
+        for node in self.tree:
+            if node.head.idx == node.idx:
+                return node.embedding
+
+    def _set_root_gradient(self, grad):
+        '''Set the error gradient on the root node in the comp graph.'''
+        for node in self.tree:
+            if node.head.idx == node.idx:
+                node.gradient = grad
+                node.computed = True
