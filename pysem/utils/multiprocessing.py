@@ -15,7 +15,7 @@ strip_num = str.maketrans({key: None for key in '1234567890'})
 
 
 def starmap(func, arglist):
-    '''Apply a multiargument function to a list of input argument tuples'''
+    '''Apply a multiargument function to a list of input argument tuples.'''
     acc = []
     with mp.Pool(processes=mp.cpu_count()) as pool:
         for result in pool.starmap_async(func, arglist).get():
@@ -24,7 +24,7 @@ def starmap(func, arglist):
 
 
 def plainmap(func, arglist):
-    '''Apply a single argument function to a list of input arguments'''
+    '''Apply a single argument function to a list of input arguments.'''
     acc = []
     with mp.Pool(processes=mp.cpu_count()) as pool:
         for result in pool.map_async(func, arglist).get():
@@ -33,7 +33,7 @@ def plainmap(func, arglist):
 
 
 def flatten(lst):
-    '''Flattens arbitrarily nested lists'''
+    '''Flattens arbitrarily nested lists.'''
     acc = []
     for item in lst:
         if isinstance(item, list):
@@ -44,7 +44,7 @@ def flatten(lst):
 
 
 def basic_strip(article):
-    '''Strips out punctuation and very short sentences'''
+    '''Strips out punctuation and very short sentences.'''
     sen_list = tokenizer.tokenize(article)
     sen_list = [s.lower() for s in sen_list if len(s) > 5]
     return ' '.join(sen_list)
@@ -60,7 +60,7 @@ def max_strip(article):
 
 
 def count_words(article):
-    '''Builds a dictionary of word counts for an article'''
+    '''Builds a dictionary of word counts for an article.'''
     counts = collections.Counter()
     sen_list = tokenizer.tokenize(article)
     sen_list = [s.replace('\n', ' ') for s in sen_list]
