@@ -130,84 +130,89 @@ class MLP(Model):
         return self.label_dict[int(np.argmax(self.yo, axis=0))]
 
 
-class RNN(Model):
-    def __init__(self, vocab, dim, eps=0.05):
+class RecurrentNetwork(Model):
+    def __init__(self, dim, vocab, eps=0.5):
         self.dim = dim
-        # Randomly initialize the three weight matrices
-        self.wx = np.random.random((dim, len(vocab)))*eps*2-eps
-        self.wh = np.random.random((dim, dim))*eps*2-eps
-        self.xs, self.hs, self.ys = {}, {}, {}
-        self.bh = np.zeros(dim)
         self.vocab = vocab
 
-        self.wrd_to_ind = {word: idx for idx, word in enumerate(vocab)}
-        self.ind_to_wrd = {idx: word for idx, word in enumerate(vocab)}
+        self.weights = self.gaussian_id(dim)
+        self.vectors = {word: np.random.normal(loc=0, scale=1/self.dim**0.3,
+                        size=self.dim) for word in self.vocab}
 
-    def get_onehot(self, ind):
-        onehot = np.zeros(len(self.vocab))
-        onehot[ind] = 1
-        return onehot
+        self.vectors['U'] = np.random.normal(loc=0, scale=1/self.dim**0.3,
+                                             size=self.dim)
+        self.xs, self.hs = {}, {}
+        self.bias = np.zeros(dim)
+
+    @staticmethod
+    def gaussian_id(dim):
+        '''Returns an identity matrix with gaussian noise added.'''
+        identity = np.eye(dim)
+        #  gaussian = np.random.normal(loc=0, scale=0.1, size=(dim, dim))
+        return identity  # gaussian
 
     def set_root_gradient(self, grad):
-        self.root_grad = grad
+        self.root_grad = grad.flatten()
 
-    def get_activities(self, seq_in):
-        self.hs[-1] = np.zeros(len(self.wh))
-        for t in range(len(seq_in)):
-            self.xs[t] = self.get_onehot(seq_in[t])
-            self.hs[t] = np.tanh(np.dot(self.wx, self.xs[t]) +
-                                 np.dot(self.wh, self.hs[t-1])+self.bh)
+    def compute_embeddings(self):
+        self.hs[-1] = np.zeros(self.dim)
 
-            self.ys[t] = np.tanh(self.hs[t])
+        for i in range(len(self.sequence)):
+            self.xs[i] = self.vectors[self.sequence[i]]
+            self.hs[i] = np.dot(self.weights, self.hs[i-1]) + self.xs[i]
+            self.hs[i] = np.tanh(self.hs[i] + self.bias)
 
-    def forward_pass(self, sequence):
-        self.sequence = [s.lower() for s in sequence.split() if
-                         s.lower() in self.vocab]
+    def forward_pass(self, sentence):
+        self.sequence = [s.lower() for s in sentence.split()]
         self.sequence = [s.translate(punc_translator) for s in self.sequence]
-        self.sequence = [s for s in self.sequence if s in self.vocab]
-        print([s in self.vocab for s in self.sequence])
-        print(self.sequence)
-        xs = np.array([self.wrd_to_ind[word] for word in self.sequence])
-        self.get_activities(xs)
+        self.sequence = [s if s in self.vocab else 'U' for s in self.sequence]
 
-    def backward_pass(self, error_grad, rate=0.3):
-        self.set_root_gradient(error_grad)
+        self.compute_embeddings()
 
-        wx_grad = np.zeros_like(self.wx)
-        wh_grad = np.zeros_like(self.wh)
-        bh_grad = np.zeros_like(self.bh)
+    def backward_pass(self, error_grad, rate=0.1):
+        error_grad = error_grad.flatten()
+        # print('Gradient norm from MLP: ', np.linalg.norm(error_grad))
 
-        h_grads = {}
-        h_grads[len(self.sequence)] = np.zeros(self.dim)
+        dw = np.zeros_like(self.weights)
+        db = np.zeros_like(self.bias)
 
-        for _ in reversed(range(len(self.sequence))):
-            if _ == len(self.sequence) - 1:
-                h_grads[_] = self.root_grad.flatten() * (1 - self.ys[_]**2)
-            else:
-                h_grads[_] = np.dot(self.wh.T, h_grads[_+1])
-                h_grads[_] = h_grads[_] * (1 - self.hs[_]**2)
-                wx_grad += np.outer(h_grads[_], self.xs[_])
-                wh_grad += np.outer(h_grads[_+1], self.hs[_])
-                bh_grad += h_grads[_]
+        dh = error_grad * self.tanh_grad(self.hs[len(self.sequence)-1])
+        dh_next = np.zeros_like(self.hs[0])
 
-        grads = [wx_grad, wh_grad, bh_grad]
+        self.max_norm = 0
+
+        for i in reversed(range(len(self.sequence))):
+            if i < len(self.sequence) - 1:
+                dh = np.dot(self.weights.T, dh_next)
+                dh = dh * self.tanh_grad(self.hs[i])
+
+            dw += np.outer(dh_next, self.hs[i])
+            db += dh
+
+            if np.linalg.norm(np.outer(dh_next, self.hs[i])) > self.max_norm:
+                self.max_norm = np.linalg.norm(np.outer(dh_next, self.hs[i]))
+
+            # if np.linalg.norm(np.outer(dh_next, self.hs[i])) < 0.05:
+                # print('Vanishing gradient on item ', i , ' in sequence.')
+
+            self.vectors[self.sequence[i]] += -rate * dh
+            dh_next = dh
+
+        grads = [dw, db]
 
         # Clip gradients to avoid explosions
-        for _ in range(len(grads)):
-            if np.linalg.norm(grads[_]) > 5:
-                grads[_] = 5 * grads[_] / np.linalg.norm(grads[_])
+        for i in range(len(grads)):
+            if np.linalg.norm(grads[i]) > 5:
+                grads[i] = 5 * grads[i] / np.linalg.norm(grads[i])
 
-        wx_grad = grads[0]
-        wh_grad = grads[1]
-        bh_grad = grads[2]
+        w_grad = grads[0]
+        b_grad = grads[1]
 
-        self.wx += -rate * wx_grad
-        self.wh += -rate * wh_grad
-        self.bh += -rate * bh_grad
+        self.weights += -rate * w_grad
+        self.bias += -rate * b_grad
 
     def get_sentence_embedding(self):
-        print(len(self.ys))
-        return self.ys[len(self.sequence)-1]
+        return self.hs[len(self.sequence)-1]
 
 
 class DependencyNetwork(Model):
