@@ -11,6 +11,12 @@ parser = spacy.load('en')
 punc_translator = str.maketrans({key: None for key in string.punctuation})
 
 
+def square_zeros(dim):
+    def func():
+        return np.zeros((dim, dim))
+    return func
+
+
 class Model(object):
     """
     """
@@ -34,12 +40,6 @@ class Model(object):
         return np.exp(x) / np.sum(np.exp(x), axis=0)
 
 
-def square_zeros(dim):
-    def func():
-        return np.zeros((dim, dim))
-    return func
-
-
 class MLP(Model):
     """
     A multilayer perceptron performing classification.
@@ -57,11 +57,11 @@ class MLP(Model):
         weightsare chosen from a uniform distribution on the interval
         [-0.1, 0.1].
     """
-    def __init__(self, di, dh, do, eps=0.1):
+    def __init__(self, di, dh, do, eps=0.05):
         self.w1 = np.random.random((dh, di+1)) * eps * 2 - eps
         self.w2 = np.random.random((do, dh+1)) * eps * 2 - eps
-        self.costs = []
-        self.bsize = 1
+        self.costs = 0
+        self.iters = 0
 
     @property
     def label_dict(self):
@@ -74,24 +74,8 @@ class MLP(Model):
         else:
             self._label_dict = l_dict
 
-    @property
-    def nl(self):
-        return self._nl
-
-    @nl.setter
-    def nl(self, act_func):
-        self._nl = act_func
-
-    @property
-    def nl_grad(self):
-        return self._nl_grad
-
-    @nl_grad.setter
-    def nl_grad(self, grad_func):
-        self._nl_grad = grad_func
-
     def get_activations(self, x):
-        self.yh = self.nl(np.dot(self.w1, x))
+        self.yh = self.tanh(np.dot(self.w1, x))
         self.yh = np.vstack((np.ones(self.bsize), self.yh))
         self.yo = self.softmax(np.dot(self.w2, self.yh))
 
@@ -105,21 +89,21 @@ class MLP(Model):
             self.get_activations(xs)
 
             # Compute gradients
-            yo_grad = self.yo-self.ys
-            yh_grad = np.dot(self.w2.T, yo_grad) * self.nl_grad(self.yh)
+            yo_grad = self.yo - self.ys
+            yh_grad = np.dot(self.w2.T, yo_grad) * self.tanh_grad(self.yh)
 
             w2_grad = np.dot(yo_grad, self.yh.T) / self.bsize
             w1_grad = np.dot(yh_grad[1:, :], xs.T) / self.bsize
 
             self.yi_grad = np.dot(self.w1.T, yh_grad[1:])
-            self.yo_grad = yo_grad
-            self.yh_grad = yh_grad
+
             # Update weights
             self.w1 += -rate * w1_grad
             self.w2 += -rate * w2_grad
 
             # Log the cost of the current weights
-            self.costs.append(self.get_cost())
+            self.costs += self.get_cost()
+            self.iters += 1
 
     def get_cost(self):
         return np.sum(-np.log(self.yo) * self.ys) / float(self.bsize)
@@ -136,20 +120,31 @@ class RecurrentNetwork(Model):
         self.vocab = vocab
 
         self.weights = self.gaussian_id(dim)
-        self.vectors = {word: np.random.normal(loc=0, scale=1/self.dim**0.3,
-                        size=self.dim) for word in self.vocab}
+        self.vectors = {}
 
-        self.vectors['U'] = np.random.normal(loc=0, scale=1/self.dim**0.3,
-                                             size=self.dim)
+        with open('word2vec.pickle', 'rb') as pfile:
+            self.word2vec = pickle.load(pfile, encoding='latin1')
+
+        for word in vocab:
+            try:
+                self.vectors[word] = self.word2vec[word]
+            except KeyError:
+                self.vectors[word] = np.zeros(dim)
+
+        self.vectors['U'] = np.zeros(dim)
         self.xs, self.hs = {}, {}
         self.bias = np.zeros(dim)
 
     @staticmethod
     def gaussian_id(dim):
         '''Returns an identity matrix with gaussian noise added.'''
-        # identity = np.eye(dim)
-        # gaussian = np.random.normal(loc=0, scale=0.05, size=(dim, dim))
-        # return identity + gaussian
+        identity = np.eye(dim)
+        gaussian = np.random.normal(loc=0, scale=0.05, size=(dim, dim))
+        return identity + gaussian
+
+    @staticmethod
+    def random_init(dim):
+        '''Returns matrix of values sampled from [-1/dim**0.5, 1/dim**0.5]'''
         eps = 1.0 / np.sqrt(dim)
         weights = np.random.random((dim, dim)) * 2 * eps - eps
         return weights
@@ -224,9 +219,18 @@ class DependencyNetwork(Model):
         self.parser = parser
         self.weights = defaultdict(square_zeros(self.dim))
         self.wgrads = defaultdict(square_zeros(self.dim))
-
         self.vectors = {word: np.random.random((self.dim, 1)) *
                         eps * 2 - eps for word in self.vocab}
+        
+        # self.vectors = {}
+        # with open('word2vec.pickle', 'rb') as pfile:
+        #     self.word2vec = pickle.load(pfile, encoding='latin1')
+
+        # for word in vocab:
+        #     try:
+        #         self.vectors[word] = self.word2vec[word].reshape(300, 1)
+        #     except KeyError:
+                # self.vectors[word] = np.zeros(dim).reshape(300, 1)
 
         for dep in self.deps:
             self.weights[dep] = self.gaussian_id(self.dim)
@@ -247,6 +251,13 @@ class DependencyNetwork(Model):
         identity = np.eye(dim)
         gaussian = np.random.normal(loc=0, scale=0.05, size=(dim, dim))
         return identity + gaussian
+
+    @staticmethod
+    def random_init(dim):
+        '''Returns matrix of values sampled from [-1/dim**0.5, 1/dim**0.5]'''
+        eps = 1.0 / np.sqrt(dim)
+        weights = np.random.random((dim, dim)) * 2 * eps - eps
+        return weights
 
     def load_vecs(self, path):
         '''Load pretrained word embeddings for initialization.'''
