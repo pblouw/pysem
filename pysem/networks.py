@@ -147,9 +147,12 @@ class RecurrentNetwork(Model):
     @staticmethod
     def gaussian_id(dim):
         '''Returns an identity matrix with gaussian noise added.'''
-        identity = np.eye(dim)
-        #  gaussian = np.random.normal(loc=0, scale=0.1, size=(dim, dim))
-        return identity  # gaussian
+        # identity = np.eye(dim)
+        # gaussian = np.random.normal(loc=0, scale=0.05, size=(dim, dim))
+        # return identity + gaussian
+        eps = 1.0 / np.sqrt(dim)
+        weights = np.random.random((dim, dim)) * 2 * eps - eps
+        return weights
 
     def set_root_gradient(self, grad):
         self.root_grad = grad.flatten()
@@ -169,17 +172,19 @@ class RecurrentNetwork(Model):
 
         self.compute_embeddings()
 
+    def clip(self, grad, clipval=5):
+        if np.linalg.norm(grad) > clipval:
+            grad = clipval * grad / np.linalg.norm(grad)
+        return grad
+
     def backward_pass(self, error_grad, rate=0.1):
         error_grad = error_grad.flatten()
-        # print('Gradient norm from MLP: ', np.linalg.norm(error_grad))
 
         dw = np.zeros_like(self.weights)
         db = np.zeros_like(self.bias)
 
         dh = error_grad * self.tanh_grad(self.hs[len(self.sequence)-1])
         dh_next = np.zeros_like(self.hs[0])
-
-        self.max_norm = 0
 
         for i in reversed(range(len(self.sequence))):
             if i < len(self.sequence) - 1:
@@ -188,28 +193,15 @@ class RecurrentNetwork(Model):
 
             dw += np.outer(dh_next, self.hs[i])
             db += dh
-
-            if np.linalg.norm(np.outer(dh_next, self.hs[i])) > self.max_norm:
-                self.max_norm = np.linalg.norm(np.outer(dh_next, self.hs[i]))
-
-            # if np.linalg.norm(np.outer(dh_next, self.hs[i])) < 0.05:
-                # print('Vanishing gradient on item ', i , ' in sequence.')
-
-            self.vectors[self.sequence[i]] += -rate * dh
             dh_next = dh
 
-        grads = [dw, db]
+            self.vectors[self.sequence[i]] += -rate * dh
 
-        # Clip gradients to avoid explosions
-        for i in range(len(grads)):
-            if np.linalg.norm(grads[i]) > 5:
-                grads[i] = 5 * grads[i] / np.linalg.norm(grads[i])
+        dw = self.clip(dw)
+        db = self.clip(db)
 
-        w_grad = grads[0]
-        b_grad = grads[1]
-
-        self.weights += -rate * w_grad
-        self.bias += -rate * b_grad
+        self.weights += -rate * dw
+        self.bias += -rate * db
 
     def get_sentence_embedding(self):
         return self.hs[len(self.sequence)-1]
