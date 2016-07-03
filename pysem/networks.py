@@ -221,7 +221,7 @@ class DependencyNetwork(Model):
         self.wgrads = defaultdict(square_zeros(self.dim))
         self.vectors = {word: np.random.random((self.dim, 1)) *
                         eps * 2 - eps for word in self.vocab}
-        
+
         # self.vectors = {}
         # with open('word2vec.pickle', 'rb') as pfile:
         #     self.word2vec = pickle.load(pfile, encoding='latin1')
@@ -230,7 +230,7 @@ class DependencyNetwork(Model):
         #     try:
         #         self.vectors[word] = self.word2vec[word].reshape(300, 1)
         #     except KeyError:
-                # self.vectors[word] = np.zeros(dim).reshape(300, 1)
+        #     self.vectors[word] = np.zeros(dim).reshape(300, 1)
 
         for dep in self.deps:
             self.weights[dep] = self.gaussian_id(self.dim)
