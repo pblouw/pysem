@@ -62,6 +62,7 @@ class LogisticRegression(Model):
         self.o_grad = probs - ys
         self.w_grad = np.dot(self.o_grad, xs.T) / bsize
         self.b_grad = np.sum(self.o_grad, axis=1) / bsize
+        self.yi_grad = np.dot(self.weights.T, self.o_grad)
 
         self.weights -= rate * self.w_grad
         self.bias -= rate * self.b_grad
@@ -146,6 +147,7 @@ class MultiLayerPerceptron(Model):
 
         yo_grad = self.yo - ys
         yh_grad = np.dot(self.w2.T, yo_grad) * self.tanh_grad(self.yh)
+        self.yi_grad = np.dot(self.w1.T, yh_grad)
 
         self.bo_grad = np.sum(yo_grad, axis=1) / bsize
         self.bh_grad = np.sum(yh_grad, axis=1) / bsize

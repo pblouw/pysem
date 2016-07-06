@@ -56,16 +56,6 @@ class DependencyNetwork(Model):
         for dep in self.deps:
             self.weights[dep] = self.random_init(self.dim)
 
-    def one_hot(self, token):
-        '''Converts a spacy token into the correct onehot encoding.'''
-        zeros = np.zeros(len(self.vocab))
-        try:
-            index = self.indices[token.lower_]
-            zeros[index] = 1
-        except KeyError:
-            pass
-        return zeros.reshape((len(zeros), 1))
-
     @staticmethod
     def gaussian_id(dim):
         '''Returns an identity matrix with gaussian noise added.'''
