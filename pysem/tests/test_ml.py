@@ -20,7 +20,7 @@ def numerical_gradient(model, params, idx, xs, ys, delta=1e-5):
 
 def test_logistic_regression():
     n_features = 50
-    n_labels = 10
+    n_labels = 3
     n_gradient_checks = 50
 
     xs = np.random.random((n_features, 2))
@@ -50,7 +50,7 @@ def test_logistic_regression():
 
     # Check that learning is successful
     for _ in range(50):
-        model.train(xs, ys, rate=0.001)
+        model.train(xs, ys, rate=0.01)
 
     assert all(np.equal(model.predict(xs), np.argmax(ys, axis=0)))
 
@@ -106,6 +106,6 @@ def test_multi_layer_perceptron():
 
     # Check that learning is successful
     for _ in range(50):
-        model.train(xs, ys, rate=0.001)
+        model.train(xs, ys, rate=0.01)
 
     assert all(np.equal(model.predict(xs), np.argmax(ys, axis=0)))
