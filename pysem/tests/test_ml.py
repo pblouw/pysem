@@ -49,13 +49,16 @@ def test_logistic_regression():
         assert np.allclose(numerical, analytic)
 
     # Check that learning is successful
+    for _ in range(50):
+        model.train(xs, ys, rate=0.001)
+
     assert all(np.equal(model.predict(xs), np.argmax(ys, axis=0)))
 
 
 def test_multi_layer_perceptron():
     di = 50
     dh = 25
-    do = 10
+    do = 3
     n_gradient_checks = 50
 
     xs = np.random.random((di, 2))
@@ -100,5 +103,9 @@ def test_multi_layer_perceptron():
         analytic = model.bo_grad.flat[idx]
 
         assert np.allclose(numerical, analytic)
+
+    # Check that learning is successful
+    for _ in range(50):
+        model.train(xs, ys, rate=0.001)
 
     assert all(np.equal(model.predict(xs), np.argmax(ys, axis=0)))
