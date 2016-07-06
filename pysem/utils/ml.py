@@ -27,7 +27,7 @@ class LogisticRegression(Model):
     ----------
     n_features : int
         The number of features to be used for predicting class labels.
-    do : int
+    n_labels : int
         The number of class labels to be predicted from input features.
     eps: float, optional
         The size of the interval to sample from for weight initialization.
@@ -41,12 +41,13 @@ class LogisticRegression(Model):
         label.
     bias : numpy.ndarray
         The bias on the output layer that computes probabilities over labels.
+    costs : list
+        A list of costs associated with each batch that was trained on.
+        Initialized to the empty list.        
     """
     def __init__(self, n_features, n_labels, eps=0.1):
         self.weights = np.random.random((n_labels, n_features)) * eps
         self.bias = np.random.random(n_labels) * eps
-        self.n_features = n_features
-        self.n_labels = n_labels
         self.costs = []
 
     def train(self, xs, ys, rate):
@@ -81,7 +82,7 @@ class LogisticRegression(Model):
 
     def get_probs(self, xs):
         '''Compute label probabilities for an array of feature vectors.'''
-        bias = self.bias.reshape(self.n_labels, 1)  # for array broadcasting
+        bias = self.bias.reshape(len(self.bias), 1)  # for array broadcasting
         probs = self.softmax(np.dot(self.weights, xs) + bias)
         return probs
 
