@@ -144,6 +144,7 @@ def test_weight_gradients():
     depnet.forward_pass(xs)
     deps = [node.dep_ for node in depnet.tree if node.dep_ != 'ROOT']
 
+    # Use random weight in each matrix for n numerical gradient checks
     for _ in range(n_gradient_checks):
         for dep in deps:
             idx = np.random.randint(0, depnet.weights[dep].size, size=1)
@@ -160,5 +161,47 @@ def test_weight_gradients():
 
             depnet.backward_pass(error_grad, rate=0.001)
             analytic = depnet.wgrads[dep].flat[idx]
+
+            assert np.allclose(analytic, numerical)
+
+
+def test_embedding_gradients():
+    snli = SNLI(snli_path)
+    snli.build_vocab()
+    snli.extractor = snli.get_sentences
+
+    dim = 50
+    n_labels = 3
+    n_gradient_checks = 25
+
+    depnet = DependencyNetwork(dim=dim, vocab=snli.vocab)
+    logreg = LogisticRegression(n_features=dim, n_labels=n_labels)
+
+    sample = next(snli.train_data)
+    xs = random.choice(sample)
+    ys = np.zeros(n_labels)
+    ys[np.random.randint(0, n_labels, 1)] = 1
+    ys = ys.reshape(n_labels, 1)
+
+    depnet.forward_pass(xs)
+    words = [node.orth_.lower() for node in depnet.tree]
+
+    for _ in range(n_gradient_checks):
+        for word in words:
+            idx = np.random.randint(0, depnet.vectors[word].size, size=1)
+            params = depnet.vectors[word].flat
+
+            numerical = num_grad(depnet, params, idx, xs, ys, logreg)
+
+            depnet.forward_pass(xs)
+
+            logreg.train(depnet.get_root_embedding(), ys, rate=0.001)
+            embedding = depnet.get_root_embedding()
+
+            error_grad = logreg.yi_grad * depnet.tanh_grad(embedding)
+
+            depnet.backward_pass(error_grad, rate=0.001)
+            node = [node for node in depnet.tree if node.lower_ == word].pop()
+            analytic = node.gradient.flat[idx]
 
             assert np.allclose(analytic, numerical)
