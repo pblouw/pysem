@@ -63,7 +63,7 @@ def test_backward_pass():
     snli.extractor = snli.get_sentences
 
     dim = 50
-    eps = 0.1
+    eps = 0.5
 
     depnet = DependencyNetwork(dim=dim, vocab=snli.vocab)
     sample = next(snli.train_data)
@@ -72,22 +72,30 @@ def test_backward_pass():
     error_grad = np.random.random((dim, 1)) * 2 * eps - eps
 
     depnet.forward_pass(sen)
-    deps = [node.dep_ for node in depnet.tree]
+    deps = [node.dep_ for node in depnet.tree if node.dep_ != 'ROOT']
 
+    # Save a copy of the weights before SGD update
     weights = []
     for dep in deps:
-        weights.append(depnet.weights[dep])
+        weights.append(np.copy(depnet.weights[dep]))
 
+    # Do backprop
     depnet.backward_pass(error_grad, rate=0.1)
 
+    # Check that a gradient is computed for every node in the tree
     for node in depnet.tree:
         assert isinstance(node.gradient, np.ndarray)
 
+    # Check that gradient norms are nonzero
+    for dep in deps:
+        assert np.linalg.norm(depnet.wgrads[dep].flatten()) != 0
+
+    # Save a copy of the weights after SGD update
     new_weights = []
     for dep in deps:
-        new_weights.append(depnet.weights[dep])
+        new_weights.append(np.copy(depnet.weights[dep]))
 
-    differences = [w[1]-w[0] for w in zip(weights, new_weights)]
+    # Check that every weight has changed after the SGD update
+    for pair in zip(weights, new_weights):
+        assert np.count_nonzero(pair[1] - pair[0]) == pair[0].size
 
-    for difference in differences:
-        assert np.count_nonzero(difference) == 0

@@ -21,13 +21,6 @@ class Model(object):
     """
     """
     @staticmethod
-    def sigmoid(x):
-        return 1.0 / (1 + np.exp(-x))
-
-    def sigmoid_grad(self, x):
-        return self.sigmoid(x) * (1 - self.sigmoid(x))
-
-    @staticmethod
     def tanh(x):
         return np.tanh(x)
 
@@ -61,7 +54,7 @@ class DependencyNetwork(Model):
                         eps * 2 - eps for word in self.vocab}
 
         for dep in self.deps:
-            self.weights[dep] = self.gaussian_id(self.dim)
+            self.weights[dep] = self.random_init(self.dim)
 
     def one_hot(self, token):
         '''Converts a spacy token into the correct onehot encoding.'''
@@ -173,14 +166,15 @@ class DependencyNetwork(Model):
         '''Use node gradients to update the word embeddings at each node.'''
         for node in self.tree:
             try:
-                self.vectors[node.lower_] += -self.rate * node.gradient
+                self.vectors[node.lower_] -= self.rate * node.gradient
             except KeyError:
                 pass
 
     def update_weights(self):
         '''Use weight gradients to update the weights for each dependency,'''
         for dep in self.wgrads:
-            self.weights[dep] += -self.rate * self.wgrads[dep]
+            depcount = len([True for node in self.tree if node.dep_ == dep])
+            self.weights[dep] -= self.rate * self.wgrads[dep] / depcount
 
     def forward_pass(self, sentence):
         '''Compute activations for every node in the computational graph
