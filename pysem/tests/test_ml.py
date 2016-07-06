@@ -21,7 +21,7 @@ def numerical_gradient(model, params, idx, xs, ys, delta=1e-5):
 def test_logistic_regression():
     n_features = 50
     n_labels = 10
-    n_gradient_checks = 100
+    n_gradient_checks = 50
 
     xs = np.random.random((n_features, 2))
     ys = np.zeros((n_labels, 2))
@@ -56,7 +56,7 @@ def test_multi_layer_perceptron():
     di = 50
     dh = 25
     do = 10
-    n_gradient_checks = 100
+    n_gradient_checks = 50
 
     xs = np.random.random((di, 2))
     ys = np.zeros((do, 2))

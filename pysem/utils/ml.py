@@ -43,7 +43,7 @@ class LogisticRegression(Model):
         The bias on the output layer that computes probabilities over labels.
     costs : list
         A list of costs associated with each batch that was trained on.
-        Initialized to the empty list.        
+        Initialized to the empty list.
     """
     def __init__(self, n_features, n_labels, eps=0.1):
         self.weights = np.random.random((n_labels, n_features)) * eps
