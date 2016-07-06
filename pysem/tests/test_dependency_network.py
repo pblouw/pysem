@@ -98,4 +98,3 @@ def test_backward_pass():
     # Check that every weight has changed after the SGD update
     for pair in zip(weights, new_weights):
         assert np.count_nonzero(pair[1] - pair[0]) == pair[0].size
-
