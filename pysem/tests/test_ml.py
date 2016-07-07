@@ -105,7 +105,7 @@ def test_multi_layer_perceptron():
         assert np.allclose(numerical, analytic)
 
     # Check that learning is successful
-    for _ in range(50):
+    for _ in range(100):
         model.train(xs, ys, rate=0.01)
 
     assert all(np.equal(model.predict(xs), np.argmax(ys, axis=0)))
