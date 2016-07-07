@@ -12,29 +12,91 @@ punc_translator = str.maketrans({key: None for key in string.punctuation})
 
 
 def square_zeros(dim):
+    '''Returns a function that produces a square array of zeros when called.
+    Used to initialize defaultdicts that default to a numpy array of zeros.'''
     def func():
         return np.zeros((dim, dim))
     return func
 
 
-class Model(object):
-    """
+class RecursiveModel(object):
+    """A base class for networks that use recursive applications of one or
+    more set of weights to model sequential data. Recurrent networks model
+    sequences by recursively applying weights in a linear chain, while
+    dependency networks model sequences by recursively applying weights
+    using tree structures.
     """
     @staticmethod
     def tanh(x):
+        '''Apply the tanh nonlinearity to an input vector.'''
         return np.tanh(x)
 
     @staticmethod
     def tanh_grad(x):
+        '''Compute tanh gradient with respect to an input vector.'''
         return 1.0 - x * x
 
     @staticmethod
     def softmax(x):
+        '''Compute a softmax distribution over an input vector.'''
         return np.exp(x) / np.sum(np.exp(x), axis=0)
 
+    @staticmethod
+    def gaussian_id(dim):
+        '''Returns an identity matrix with gaussian noise added.'''
+        identity = np.eye(dim)
+        gaussian = np.random.normal(loc=0, scale=0.05, size=(dim, dim))
+        return identity + gaussian
 
-class DependencyNetwork(Model):
+    @staticmethod
+    def random_init(dim):
+        '''Returns matrix of values sampled from +- 1/root(dim) interval.'''
+        eps = 1.0 / np.sqrt(dim)
+        weights = np.random.random((dim, dim)) * 2 * eps - eps
+        return weights
 
+    def load_vecs(self, path):
+        '''Load pretrained word embeddings for initialization.'''
+        with open(path, 'rb') as pfile:
+            self.vectors = pickle.load(pfile)
+
+
+class DependencyNetwork(RecursiveModel):
+    """A plain recurrent network that computes a hidden state given an input
+    and the previous hidden state. The computed hidden state therefore depends
+    on both the current input and the entire history of the input sequence up
+    to this point. This implementation is designed to compress a sequence into
+    a single hidden representation rather than make a prediction for each item
+    in the input sequence (i.e. there are no hidden-to-output weights.)
+
+    Parameters:
+    ----------
+    dim : int
+        The dimensionality of the hidden state representation.
+    vocab : list of strings
+        The vocabulary of possible input items.
+    eps : float, optional
+        The scaling factor on random weight initialization.
+
+    Attributes:
+    -----------
+    dim : int
+        The dimensionality of the hidden state representation.
+    vocab : list of strings
+        The vocabulary of possible input items.
+    parser : callable
+        The parser used to produce a dependency tree from an input sentence.
+    weights : defaultdict
+        Matches each known dependency with the corresponding weight matrix.
+    wgrads : defaultdict
+        Matches each known dependency with the corresponding weight gradient.
+    vectors : dict
+        Matches each vocabulary item with a vector embedding that is learned
+        over the course of training the network.
+    tree : list
+        A list of the nodes that make the dependency tree for an input
+        sentence. Only computed when forward_pass is called on a sentence.
+    """
     deps = ['compound', 'punct', 'nsubj', 'ROOT', 'det', 'attr', 'cc',
             'npadvmod', 'appos', 'prep', 'pobj', 'amod', 'advmod', 'acl',
             'nsubjpass', 'auxpass', 'agent', 'advcl', 'aux', 'xcomp', 'nmod',
@@ -46,7 +108,6 @@ class DependencyNetwork(Model):
     def __init__(self, dim, vocab, eps=0.3):
         self.dim = dim
         self.vocab = sorted(list(vocab))
-        self.indices = {wrd: idx for idx, wrd in enumerate(self.vocab)}
         self.parser = parser
         self.weights = defaultdict(square_zeros(self.dim))
         self.wgrads = defaultdict(square_zeros(self.dim))
@@ -55,25 +116,6 @@ class DependencyNetwork(Model):
 
         for dep in self.deps:
             self.weights[dep] = self.random_init(self.dim)
-
-    @staticmethod
-    def gaussian_id(dim):
-        '''Returns an identity matrix with gaussian noise added.'''
-        identity = np.eye(dim)
-        gaussian = np.random.normal(loc=0, scale=0.05, size=(dim, dim))
-        return identity + gaussian
-
-    @staticmethod
-    def random_init(dim):
-        '''Returns matrix of values sampled from [-1/dim**0.5, 1/dim**0.5]'''
-        eps = 1.0 / np.sqrt(dim)
-        weights = np.random.random((dim, dim)) * 2 * eps - eps
-        return weights
-
-    def load_vecs(self, path):
-        '''Load pretrained word embeddings for initialization.'''
-        with open(path, 'rb') as pfile:
-            self.vectors = pickle.load(pfile)
 
     def reset_comp_graph(self):
         '''Flag all nodes in the graph as being uncomputed.'''
@@ -211,52 +253,76 @@ class DependencyNetwork(Model):
                 node.computed = True
 
 
-class RecurrentNetwork(Model):
+class RecurrentNetwork(RecursiveModel):
+    """A plain recurrent network that computes a hidden state given an input
+    and the previous hidden state. The computed hidden state therefore depends
+    on both the current input and the entire history of the input sequence up
+    to this point. This implementation is designed to compress a sequence into
+    a single hidden representation rather than make a prediction for each item
+    in the input sequence (i.e. there are no hidden-to-output weights.)
+
+    Parameters:
+    ----------
+    dim : int
+        The dimensionality of the hidden state representation.
+    vocab : list of strings
+        The vocabulary of possible input items.
+    eps : float, optional
+        The scaling factor on random weight initialization.
+
+    Attributes:
+    -----------
+    dim : int
+        The dimensionality of the hidden state representation.
+    vocab : list of strings
+        The vocabulary of possible input items.
+    weights : numpy.ndarray
+        The hidden-to-hidden weight matrix.
+    bias : numpy.ndarray
+        The bias vector on the hidden state.
+    vectors : dict
+        Matches each vocabulary item with a vector embedding that is learned
+        over the course of training the network.
+    """
     def __init__(self, dim, vocab, eps=0.3):
         self.dim = dim
         self.vocab = vocab
         self.weights = self.random_init(dim)
+        self.xs, self.hs = {}, {}
+        self.bias = np.zeros((dim, 1))
         self.vectors = {word: np.random.random((self.dim, 1)) *
                         eps * 2 - eps for word in self.vocab}
 
-        self.vectors['U'] = np.zeros(dim)
-        self.xs, self.hs = {}, {}
-        self.bias = np.zeros((dim, 1))
+    def clip_gradient(self, gradient, clipval=5):
+        '''Clip a large gradient so that its norm is equal to clipval.'''
+        norm = np.linalg.norm(gradient)
+        if norm > clipval:
+            gradient = (gradient / norm) * 5
 
-    @staticmethod
-    def random_init(dim):
-        '''Returns matrix of values sampled from [-1/dim**0.5, 1/dim**0.5]'''
-        eps = 1.0 / np.sqrt(dim)
-        weights = np.random.random((dim, dim)) * 2 * eps - eps
-        return weights
+        return gradient
 
     def compute_embeddings(self):
+        '''Compute network hidden states for each item in the sequence.'''
         self.hs[-1] = np.zeros((self.dim, 1))
-
         for i in range(len(self.sequence)):
             self.xs[i] = self.vectors[self.sequence[i]]
             self.hs[i] = np.dot(self.weights, self.hs[i-1]) + self.xs[i]
             self.hs[i] = np.tanh(self.hs[i] + self.bias)
 
     def forward_pass(self, sentence):
+        '''Converts input sentence into sequence and compute hidden states.'''
         self.sequence = [s.lower() for s in sentence.split()]
         self.sequence = [s.translate(punc_translator) for s in self.sequence]
-        self.sequence = [s if s in self.vocab else 'U' for s in self.sequence]
-
+        self.sequence = [s for s in self.sequence if s in self.vocab]
         self.compute_embeddings()
 
-    def clip(self, grad, clipval=5):
-        if np.linalg.norm(grad) > clipval:
-            grad = clipval * grad / np.linalg.norm(grad)
-        return grad
-
     def backward_pass(self, error_grad, rate=0.1):
+        '''Compute gradients for hidden-to-hidden weight matrix and input word
+        vectors before performing weight updates.'''
         error_grad = error_grad * self.tanh_grad(self.get_root_embedding())
-
+        dh = error_grad
         dw = np.zeros_like(self.weights)
         db = np.zeros_like(self.bias)
-
-        dh = error_grad
         dh_next = np.zeros_like(self.hs[0])
 
         for i in reversed(range(len(self.sequence))):
@@ -270,11 +336,12 @@ class RecurrentNetwork(Model):
 
             self.vectors[self.sequence[i]] -= rate * dh
 
-        self.dw = self.clip(dw)
-        self.db = self.clip(db)
+        self.dw = self.clip_gradient(dw)
+        self.db = self.clip_gradient(db)
 
         self.weights -= rate * self.dw
         self.bias -= rate * self.db
 
     def get_root_embedding(self):
+        '''Returns the embedding for the final/root node in the sequence.'''
         return self.hs[len(self.sequence)-1]
