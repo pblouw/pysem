@@ -209,3 +209,72 @@ class DependencyNetwork(Model):
             if node.head.idx == node.idx:
                 node.gradient = grad
                 node.computed = True
+
+
+class RecurrentNetwork(Model):
+    def __init__(self, dim, vocab, eps=0.3):
+        self.dim = dim
+        self.vocab = vocab
+        self.weights = self.random_init(dim)
+        self.vectors = {word: np.random.random((self.dim, 1)) *
+                        eps * 2 - eps for word in self.vocab}
+
+        self.vectors['U'] = np.zeros(dim)
+        self.xs, self.hs = {}, {}
+        self.bias = np.zeros((dim, 1))
+
+    @staticmethod
+    def random_init(dim):
+        '''Returns matrix of values sampled from [-1/dim**0.5, 1/dim**0.5]'''
+        eps = 1.0 / np.sqrt(dim)
+        weights = np.random.random((dim, dim)) * 2 * eps - eps
+        return weights
+
+    def compute_embeddings(self):
+        self.hs[-1] = np.zeros((self.dim, 1))
+
+        for i in range(len(self.sequence)):
+            self.xs[i] = self.vectors[self.sequence[i]]
+            self.hs[i] = np.dot(self.weights, self.hs[i-1]) + self.xs[i]
+            self.hs[i] = np.tanh(self.hs[i] + self.bias)
+
+    def forward_pass(self, sentence):
+        self.sequence = [s.lower() for s in sentence.split()]
+        self.sequence = [s.translate(punc_translator) for s in self.sequence]
+        self.sequence = [s if s in self.vocab else 'U' for s in self.sequence]
+
+        self.compute_embeddings()
+
+    def clip(self, grad, clipval=5):
+        if np.linalg.norm(grad) > clipval:
+            grad = clipval * grad / np.linalg.norm(grad)
+        return grad
+
+    def backward_pass(self, error_grad, rate=0.1):
+        error_grad = error_grad * self.tanh_grad(self.get_root_embedding())
+
+        dw = np.zeros_like(self.weights)
+        db = np.zeros_like(self.bias)
+
+        dh = error_grad
+        dh_next = np.zeros_like(self.hs[0])
+
+        for i in reversed(range(len(self.sequence))):
+            if i < len(self.sequence) - 1:
+                dh = np.dot(self.weights.T, dh_next)
+                dh = dh * self.tanh_grad(self.hs[i])
+
+            dw += np.dot(dh_next, self.hs[i].T)
+            db += dh
+            dh_next = dh
+
+            self.vectors[self.sequence[i]] -= rate * dh
+
+        self.dw = self.clip(dw)
+        self.db = self.clip(db)
+
+        self.weights -= rate * self.dw
+        self.bias -= rate * self.db
+
+    def get_root_embedding(self):
+        return self.hs[len(self.sequence)-1]
