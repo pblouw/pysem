@@ -1,11 +1,12 @@
 import platform
 import random
 import time
-
+import sys
 import numpy as np
 
 from pysem.corpora import SNLI
-from pysem.networks import MLP, DependencyNetwork
+from pysem.networks import DependencyNetwork
+from pysem.utils.ml import MultiLayerPerceptron
 
 if platform.system() == 'Linux':
     snlipath = '/home/pblouw/corpora/snli_1.0/'
@@ -26,20 +27,18 @@ dev_data = [d for d in snli.dev_data if d[1] != '-']
 label_dict = {0: 'entailment', 1: 'neutral', 2: 'contradiction'}
 
 dim = 200
-iters = 10
-rate = 0.01
-batchsize = 2500
+iters = 100
+rate = 0.005
+batchsize = 50000
 
 s1_depnet = DependencyNetwork(dim=dim, vocab=snli.vocab)
 s2_depnet = DependencyNetwork(dim=dim, vocab=snli.vocab)
 
-classifier = MLP(di=2*dim, dh=400, do=3)
-classifier.label_dict = label_dict
-classifier.nl = classifier.tanh
-classifier.nl_grad = classifier.tanh_grad
+classifier = MultiLayerPerceptron(di=2*dim, dh=dim, do=3)
 
 
 def binarize(label_list):
+
     label_list = [label_list]
     lookup = {'entailment': 0, 'neutral': 1, 'contradiction': 2, '-': 1}
     y_idx = [lookup[l] for l in label_list]
@@ -59,13 +58,12 @@ def compute_accuracy(data):
         s1_depnet.forward_pass(s1)
         s2_depnet.forward_pass(s2)
 
-        bias = np.ones(1).reshape(1, 1)
         s1 = s1_depnet.get_root_embedding()
         s2 = s2_depnet.get_root_embedding()
 
-        xs = np.concatenate((bias, s1, s2))
+        xs = np.concatenate((s1, s2))
         prediction = classifier.predict(xs)
-        if prediction == label:
+        if label_dict[prediction[0]] == label:
             count += 1
 
     print('Dev set accuracy: ', count / float(len(data)))
@@ -76,8 +74,8 @@ def train(iters, batchsize, rate):
         batch = random.sample(train_data, batchsize)
         print('On training iteration ', _)
 
-        if _ % 5 == 0 and _ != 0:
-            rate = rate / 2.0
+        if _ % 10 == 0 and _ != 0:
+            rate = rate / 2
             print('Dropped rate to ', rate)
 
         for sample in batch:
@@ -88,17 +86,16 @@ def train(iters, batchsize, rate):
             s1_depnet.forward_pass(s1)
             s2_depnet.forward_pass(s2)
 
-            bias = np.ones(1).reshape(1, 1)
             emb1 = s1_depnet.get_root_embedding()
             emb2 = s2_depnet.get_root_embedding()
 
-            xs = np.concatenate((bias, emb1, emb2))
+            xs = np.concatenate((emb1, emb2))
             ys = label
 
-            classifier.train(xs, binarize(ys), iters=1, rate=rate)
+            classifier.train(xs, binarize(ys), rate=rate)
 
-            emb1_grad = classifier.yi_grad[1:dim+1]
-            emb2_grad = classifier.yi_grad[dim+1:]
+            emb1_grad = classifier.yi_grad[:dim] * s1_depnet.tanh_grad(emb1)
+            emb2_grad = classifier.yi_grad[dim:] * s2_depnet.tanh_grad(emb2)
 
             s1_depnet.backward_pass(emb1_grad, rate=rate)
             s2_depnet.backward_pass(emb2_grad, rate=rate)
