@@ -6,6 +6,7 @@ import numpy as np
 
 from collections import defaultdict
 from pysem.utils.spacy import TokenWrapper
+from pysem.utils.vsa import normalize
 
 parser = spacy.load('en')
 punc_translator = str.maketrans({key: None for key in string.punctuation})
@@ -55,10 +56,23 @@ class RecursiveModel(object):
         weights = np.random.random((dim, dim)) * 2 * eps - eps
         return weights
 
-    def load_vecs(self, path):
+    def pretrained_vecs(self, path):
         '''Load pretrained word embeddings for initialization.'''
+        self.vectors = {}
         with open(path, 'rb') as pfile:
-            self.vectors = pickle.load(pfile)
+            pretrained = pickle.load(pfile, encoding='latin1')
+
+        for word in self.vocab:
+            try:
+                self.vectors[word] = pretrained[word].reshape(self.dim, 1)
+            except KeyError:
+                random_vector = np.random.random((self.dim, 1))
+                self.vectors[word] = normalize(random_vector)
+
+    def random_vecs(self):
+        '''Use random word embeddings for initialization.'''
+        self.vectors = {word: normalize(np.random.random((self.dim, 1)))
+                        for word in self.vocab}
 
 
 class DependencyNetwork(RecursiveModel):
@@ -105,14 +119,13 @@ class DependencyNetwork(RecursiveModel):
             'preconj', 'case', 'dative', 'prt', 'quantmod', 'meta', 'intj',
             'csubj', 'predet', 'csubjpass']
 
-    def __init__(self, dim, vocab, eps=0.3):
+    def __init__(self, dim, vocab, eps=0.3, pretrained=False):
         self.dim = dim
         self.vocab = sorted(list(vocab))
         self.parser = parser
         self.weights = defaultdict(square_zeros(self.dim))
         self.wgrads = defaultdict(square_zeros(self.dim))
-        self.vectors = {word: np.random.random((self.dim, 1)) *
-                        eps * 2 - eps for word in self.vocab}
+        self.pretrained_vecs(pretrained) if pretrained else self.random_vecs()
 
         for dep in self.deps:
             self.weights[dep] = self.random_init(self.dim)
@@ -284,14 +297,13 @@ class RecurrentNetwork(RecursiveModel):
         Matches each vocabulary item with a vector embedding that is learned
         over the course of training the network.
     """
-    def __init__(self, dim, vocab, eps=0.3):
+    def __init__(self, dim, vocab, eps=0.3, pretrained=False):
         self.dim = dim
         self.vocab = vocab
         self.weights = self.random_init(dim)
         self.xs, self.hs = {}, {}
         self.bias = np.zeros((dim, 1))
-        self.vectors = {word: np.random.random((self.dim, 1)) *
-                        eps * 2 - eps for word in self.vocab}
+        self.pretrained_vecs(pretrained) if pretrained else self.random_vecs()
 
     def clip_gradient(self, gradient, clipval=5):
         '''Clip a large gradient so that its norm is equal to clipval.'''
