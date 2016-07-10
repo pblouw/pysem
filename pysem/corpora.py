@@ -6,7 +6,7 @@ import nltk
 import pickle
 import itertools
 
-from collections import Counter
+from collections import Counter, namedtuple
 from itertools import islice
 from pysem.utils.multiprocessing import plainmap, starmap, count_words
 
@@ -138,6 +138,11 @@ class Wikipedia(DataHandler):
                 yield s
 
 
+Sentences = namedtuple('Sentences', ['sentence1', 'sentence2'])
+Parses = namedtuple('Parses', ['parse1', 'parse2'])
+BinaryParses = namedtuple('BinaryParses', ['parse1', 'parse2'])
+
+
 class SNLI(DataHandler):
     """A streaming iterface to the SNLI corpus for natural language inference.
     The corpus data is provided as a json file, and this interface provides a
@@ -205,9 +210,7 @@ class SNLI(DataHandler):
     def get_parses(stream):
         '''Modifies datastream to yield parses of sentence pairs'''
         for item in stream:
-            p1 = item['sentence1_parse']
-            p2 = item['sentence2_parse']
-            yield (p1, p2)
+            yield Parses(item['sentence1_parse'], item['sentence2_parse'])
 
     @staticmethod
     def get_binary_parses(stream):
@@ -215,7 +218,7 @@ class SNLI(DataHandler):
         for item in stream:
             p1 = item['sentence1_binary_parse']
             p2 = item['sentence2_binary_parse']
-            yield (p1, p2)
+            yield BinaryParses(p1, p2)
 
     @staticmethod
     def get_text(stream):
@@ -230,7 +233,7 @@ class SNLI(DataHandler):
     def get_sentences(stream):
         '''Modifies datastream to yield sentence pairs'''
         for item in stream:
-            yield (item['sentence1'], item['sentence2'])
+            yield Sentences(item['sentence1'], item['sentence2'])
 
     @staticmethod
     def get_xy_pairs(stream):
