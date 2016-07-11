@@ -122,9 +122,7 @@ def test_snli_extractors():
     xy_pair = next(snli.dev_data)
 
     assert isinstance(xy_pair, tuple)
-    assert isinstance(xy_pair[0], tuple)
-    assert isinstance(random.choice(xy_pair[0]), str)
-    assert isinstance(random.choice(xy_pair[1]), str)
+    assert isinstance(random.choice(xy_pair), str)
 
     snli.extractor = snli.get_sentences
     sentences = next(snli.dev_data)

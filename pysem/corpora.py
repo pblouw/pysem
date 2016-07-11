@@ -141,6 +141,7 @@ class Wikipedia(DataHandler):
 Sentences = namedtuple('Sentences', ['sentence1', 'sentence2'])
 Parses = namedtuple('Parses', ['parse1', 'parse2'])
 BinaryParses = namedtuple('BinaryParses', ['parse1', 'parse2'])
+TrainingPair = namedtuple('TrainingPair', ['sentence1', 'sentence2', 'label'])
 
 
 class SNLI(DataHandler):
@@ -239,9 +240,9 @@ class SNLI(DataHandler):
     def get_xy_pairs(stream):
         '''Modifies datastream to yield x,y pairs for model training'''
         for item in stream:
-            x = (item['sentence1'], item['sentence2'])
-            y = item['gold_label']
-            yield (x, y)
+            s1 = item['sentence1']
+            s2 = item['sentence2']
+            yield TrainingPair(s1, s2, item['gold_label'])
 
     def build_vocab(self):
         '''Extract and build a vocab from all text in the corpus'''
