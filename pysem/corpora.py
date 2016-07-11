@@ -6,6 +6,8 @@ import nltk
 import pickle
 import itertools
 
+import numpy as np
+
 from collections import Counter, namedtuple
 from itertools import islice
 from pysem.utils.multiprocessing import plainmap, starmap, count_words
@@ -206,6 +208,17 @@ class SNLI(DataHandler):
     def extractor(self, func):
         self.reset_streams(func=func)
         self._extractor = func
+
+    @staticmethod
+    def binarize(labels):
+        '''Turn a list of snli labels into a binary array to use in models'''
+        label_to_idx = {'entailment': 0, 'neutral': 1, 'contradiction': 2}
+        array = np.zeros((len(label_to_idx), len(labels)))
+        rows = [label_to_idx[l] for l in labels]
+        cols = range(len(labels))
+        array[rows, cols] = 1
+
+        return array
 
     @staticmethod
     def get_parses(stream):

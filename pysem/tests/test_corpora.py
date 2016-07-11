@@ -5,6 +5,8 @@ import pytest
 import types
 import itertools
 
+import numpy as np
+
 from pysem.corpora import Wikipedia, SNLI
 from pysem.utils.multiprocessing import max_strip
 
@@ -144,3 +146,15 @@ def test_snli_extractors():
     parses = next(snli.train_data)
 
     assert isinstance(parses, tuple)
+
+
+def test_snli_binarizer():
+    labels = ['entailment', 'neutral', 'contradiction']
+    array = SNLI.binarize(labels)
+
+    assert np.sum(array) == len(labels)
+    assert array[0, 0] == 1
+    assert array[0, 1] == 0
+    assert array[1, 1] == 1
+    assert array[1, 0] == 0
+    assert array[2, 2] == 1
