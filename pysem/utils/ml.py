@@ -128,23 +128,6 @@ class MultiLayerPerceptron(Model):
         self.bh = np.random.random(dh) * eps * 2 - eps
         self.bo = np.random.random(do) * eps * 2 - eps
         self.costs = []
-        self.tstep = 0
-
-        # arrays for estimating first gradient moment for ADAM optimization
-        self.w1_m = np.zeros_like(self.w1)
-        self.w2_m = np.zeros_like(self.w2)
-        self.bh_m = np.zeros_like(self.bh)
-        self.bo_m = np.zeros_like(self.bo)
-
-        # arrays for estimating second gradient moment for ADAM optimization
-        self.w1_v = np.zeros_like(self.w1)
-        self.w2_v = np.zeros_like(self.w2)
-        self.bh_v = np.zeros_like(self.bh)
-        self.bo_v = np.zeros_like(self.bo)
-
-        self.b1 = 0.9
-        self.b2 = 0.999
-        self.epsilon = 1e-8
 
     def get_probs(self, xs):
         '''Compute label probabilities for an array of input vectors.'''
@@ -161,7 +144,6 @@ class MultiLayerPerceptron(Model):
         corresponding columns in the two arrays.'''
         bsize = xs.shape[1]
         self.get_probs(xs)
-        self.tstep += 1
 
         yo_grad = self.yo - ys
         yh_grad = np.dot(self.w2.T, yo_grad) * self.tanh_grad(self.yh)
@@ -173,30 +155,10 @@ class MultiLayerPerceptron(Model):
         self.w2_grad = np.dot(yo_grad, self.yh.T) / bsize
         self.w1_grad = np.dot(yh_grad, xs.T) / bsize
 
-        self.w1_m = self.b1 * self.w1_m + (1 - self.b1) * self.w1_grad
-        self.w2_m = self.b1 * self.w2_m + (1 - self.b1) * self.w2_grad
-        self.bh_m = self.b1 * self.bh_m + (1 - self.b1) * self.bh_grad
-        self.bo_m = self.b1 * self.bo_m + (1 - self.b1) * self.bo_grad
-
-        self.w1_v = self.b2 * self.w1_v + (1 - self.b2) * (self.w1_grad ** 2)
-        self.w2_v = self.b2 * self.w2_v + (1 - self.b2) * (self.w2_grad ** 2)
-        self.bh_v = self.b2 * self.bh_v + (1 - self.b2) * (self.bh_grad ** 2)
-        self.bo_v = self.b2 * self.bo_v + (1 - self.b2) * (self.bo_grad ** 2)
-
-        w1_m_est = self.w1_m / (1 - self.b1 ** self.tstep)
-        w2_m_est = self.w2_m / (1 - self.b1 ** self.tstep)
-        bo_m_est = self.bo_m / (1 - self.b1 ** self.tstep)
-        bh_m_est = self.bh_m / (1 - self.b1 ** self.tstep)
-
-        w1_v_est = self.w1_v / (1 - self.b2 ** self.tstep)
-        w2_v_est = self.w2_v / (1 - self.b2 ** self.tstep)
-        bo_v_est = self.bo_v / (1 - self.b2 ** self.tstep)
-        bh_v_est = self.bh_v / (1 - self.b2 ** self.tstep)
-
-        self.w1 -= rate * w1_m_est / (np.sqrt(w1_v_est) + self.epsilon)
-        self.w2 -= rate * w2_m_est / (np.sqrt(w2_v_est) + self.epsilon)
-        self.bh -= rate * bh_m_est / (np.sqrt(bh_v_est) + self.epsilon)
-        self.bo -= rate * bo_m_est / (np.sqrt(bo_v_est) + self.epsilon)
+        self.w1 -= rate * self.w1_grad
+        self.w2 -= rate * self.w2_grad
+        self.bo -= rate * self.bo_grad
+        self.bh -= rate * self.bh_grad
 
         cost = np.sum(-np.log(self.yo) * ys) / bsize
         self.costs.append(cost)
