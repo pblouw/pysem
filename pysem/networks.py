@@ -20,6 +20,14 @@ def square_zeros(dim):
     return func
 
 
+def flat_zeros(dim):
+    '''Returns a function that produces a flat array of zeros when called.
+    Used to initialize defaultdicts that default to a numpy array of zeros.'''
+    def func():
+        return np.zeros((dim, 1))
+    return func
+
+
 class RecursiveModel(object):
     """A base class for networks that use recursive applications of one or
     more set of weights to model sequential data. Recurrent networks model
@@ -50,11 +58,18 @@ class RecursiveModel(object):
         return identity + gaussian
 
     @staticmethod
-    def random_init(dim):
+    def random_weights(dim):
         '''Returns matrix of values sampled from +- 1/root(dim) interval.'''
         eps = 1.0 / np.sqrt(dim)
         weights = np.random.random((dim, dim)) * 2 * eps - eps
         return weights
+
+    @staticmethod
+    def random_vector(dim):
+        '''Returns a random vector from the unit sphere.'''
+        scale = 1 / np.sqrt(dim)
+        vector = np.random.normal(loc=0, scale=scale, size=(dim, 1))
+        return vector
 
     def pretrained_vecs(self, path):
         '''Load pretrained word embeddings for initialization.'''
@@ -125,12 +140,15 @@ class DependencyNetwork(RecursiveModel):
         self.dim = dim
         self.vocab = sorted(list(vocab))
         self.parser = parser
+        self.biases = defaultdict(flat_zeros(self.dim))
+        self.bgrads = defaultdict(flat_zeros(self.dim))
         self.weights = defaultdict(square_zeros(self.dim))
         self.wgrads = defaultdict(square_zeros(self.dim))
         self.pretrained_vecs(pretrained) if pretrained else self.random_vecs()
 
         for dep in self.deps:
-            self.weights[dep] = self.random_init(self.dim)
+            self.weights[dep] = self.random_weights(self.dim)
+            self.biases[dep] = np.zeros((self.dim, 1))
 
     def reset_comp_graph(self):
         '''Flag all nodes in the graph as being uncomputed.'''
@@ -167,6 +185,7 @@ class DependencyNetwork(RecursiveModel):
                     nlgrad = nlgrad.reshape((len(nlgrad), 1))
 
                     self.wgrads[child.dep_] += wgrad
+                    self.bgrads[child.dep_] += node.gradient
                     child.gradient = cgrad * nlgrad
                     child.computed = True
 
@@ -205,6 +224,7 @@ class DependencyNetwork(RecursiveModel):
 
         for child in children:
             emb += np.dot(self.weights[child.dep_], child.embedding)
+            emb += self.biases[child.dep_]
 
         node.embedding = self.tanh(emb)
         node.computed = True
@@ -222,6 +242,7 @@ class DependencyNetwork(RecursiveModel):
         for dep in self.wgrads:
             depcount = len([True for node in self.tree if node.dep_ == dep])
             self.weights[dep] -= self.rate * self.wgrads[dep] / depcount
+            self.biases[dep] -= self.rate * self.bgrads[dep] / depcount
 
     def forward_pass(self, sentence):
         '''Compute activations for every node in the computational graph
@@ -234,6 +255,7 @@ class DependencyNetwork(RecursiveModel):
         '''Compute gradients for every weight matrix and input word vector
         used when computing activations in accordance with the comp graph.'''
         self.wgrads = defaultdict(square_zeros(self.dim))
+        self.bgrads = defaultdict(flat_zeros(self.dim))
         self._set_root_gradient(error_grad)
         self.rate = rate
 
@@ -302,7 +324,7 @@ class RecurrentNetwork(RecursiveModel):
     def __init__(self, dim, vocab, eps=0.3, pretrained=False):
         self.dim = dim
         self.vocab = vocab
-        self.weights = self.random_init(dim)
+        self.weights = self.random_weights(dim)
         self.xs, self.hs = {}, {}
         self.bias = np.zeros((dim, 1))
         self.pretrained_vecs(pretrained) if pretrained else self.random_vecs()
