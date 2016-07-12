@@ -60,19 +60,21 @@ class RecursiveModel(object):
         '''Load pretrained word embeddings for initialization.'''
         self.vectors = {}
         with open(path, 'rb') as pfile:
-            pretrained = pickle.load(pfile, encoding='latin1')
+            pretrained = pickle.load(pfile)
 
         for word in self.vocab:
             try:
                 self.vectors[word] = pretrained[word].reshape(self.dim, 1)
             except KeyError:
-                random_vector = np.random.random((self.dim, 1))
-                self.vectors[word] = normalize(random_vector)
+                scale = 1 / np.sqrt(self.dim)
+                randvec = np.random.normal(0, scale=scale, size=(self.dim, 1))
+                self.vectors[word] = normalize(randvec)
 
     def random_vecs(self):
         '''Use random word embeddings for initialization.'''
-        self.vectors = {word: normalize(np.random.random((self.dim, 1)))
-                        for word in self.vocab}
+        scale = 1 / np.sqrt(self.dim)
+        self.vectors = {word: normalize(np.random.normal(loc=0, scale=scale,
+                        size=(self.dim, 1))) for word in self.vocab}
 
 
 class DependencyNetwork(RecursiveModel):
