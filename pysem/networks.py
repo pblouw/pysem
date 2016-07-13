@@ -1,6 +1,7 @@
 import pickle
 import spacy
 import string
+import nltk
 
 import numpy as np
 
@@ -296,7 +297,8 @@ class RecurrentNetwork(RecursiveModel):
     on both the current input and the entire history of the input sequence up
     to this point. This implementation is designed to compress a sequence into
     a single hidden representation rather than make a prediction for each item
-    in the input sequence (i.e. there are no hidden-to-output weights.)
+    in the input sequence. Batched computation is assumed by default, such
+    that each forward and backward pass will involve multiple input sentences.
 
     Parameters:
     ----------
@@ -324,10 +326,13 @@ class RecurrentNetwork(RecursiveModel):
     def __init__(self, dim, vocab, eps=0.3, pretrained=False):
         self.dim = dim
         self.vocab = vocab
-        self.weights = self.random_weights(dim)
+        self.indices = {word: idx for idx, word in enumerate(self.vocab)}
+
+        self.whh = self.random_weights(dim)
+        self.wxh = np.random.random((dim, len(self.vocab))) * 2 * eps - eps
+
         self.xs, self.hs = {}, {}
         self.bias = np.zeros((dim, 1))
-        self.pretrained_vecs(pretrained) if pretrained else self.random_vecs()
 
     def clip_gradient(self, gradient, clipval=5):
         '''Clip a large gradient so that its norm is equal to clipval.'''
@@ -337,47 +342,70 @@ class RecurrentNetwork(RecursiveModel):
 
         return gradient
 
+    def to_array(self, tokens):
+        array = np.zeros((len(self.vocab), len(tokens)))
+        for _ in range(len(tokens)):
+            if tokens[_] == '':
+                continue
+            else:
+                idx = self.indices[tokens[_].lower()]
+                array[idx, _] = 1
+
+        return array
+
     def compute_embeddings(self):
         '''Compute network hidden states for each item in the sequence.'''
-        self.hs[-1] = np.zeros((self.dim, 1))
-        for i in range(len(self.sequence)):
-            self.xs[i] = self.vectors[self.sequence[i]]
-            self.hs[i] = np.dot(self.weights, self.hs[i-1]) + self.xs[i]
+        self.hs[-1] = np.zeros((self.dim, len(self.minibatch)))
+        for i in range(self.maxlen):
+            inp_tokens = [sequence[i] for sequence in self.minibatch]
+            inp_array = self.to_array(inp_tokens)
+
+            self.xs[i] = inp_array
+            x_input = np.dot(self.wxh, inp_array)
+            self.hs[i] = np.dot(self.whh, self.hs[i-1]) + x_input
             self.hs[i] = np.tanh(self.hs[i] + self.bias)
 
-    def forward_pass(self, sentence):
-        '''Converts input sentence into sequence and compute hidden states.'''
-        self.sequence = [s.lower() for s in sentence.split()]
-        self.sequence = [s.translate(punc_translator) for s in self.sequence]
-        self.sequence = [s for s in self.sequence if s in self.vocab]
+    def forward_pass(self, minibatch):
+        '''Convert input sentences into sequence and compute hidden states.'''
+        self.minibatch = [nltk.word_tokenize(s) for s in minibatch]
+        self.maxlen = max([len(s) for s in self.minibatch])
+        self.batchsize = len(minibatch)
+
+        for x in range(len(self.minibatch)):
+            diff = self.maxlen - len(self.minibatch[x])
+            self.minibatch[x] = ['' for _ in range(diff)] + self.minibatch[x]
+
         self.compute_embeddings()
 
     def backward_pass(self, error_grad, rate=0.1):
         '''Compute gradients for hidden-to-hidden weight matrix and input word
         vectors before performing weight updates.'''
         error_grad = error_grad * self.tanh_grad(self.get_root_embedding())
+
         dh = error_grad
-        dw = np.zeros_like(self.weights)
+        dwhh = np.zeros_like(self.whh)
+        dwxh = np.zeros_like(self.wxh)
         db = np.zeros_like(self.bias)
         dh_next = np.zeros_like(self.hs[0])
 
-        for i in reversed(range(len(self.sequence))):
-            if i < len(self.sequence) - 1:
-                dh = np.dot(self.weights.T, dh_next)
+        for i in reversed(range(self.maxlen)):
+            if i < self.maxlen - 1:
+                dh = np.dot(self.whh.T, dh_next)
                 dh = dh * self.tanh_grad(self.hs[i])
 
-            dw += np.dot(dh_next, self.hs[i].T)
-            db += dh
+            dwxh += np.dot(dh, self.xs[i].T)
+            dwhh += np.dot(dh_next, self.hs[i].T)
+            db += np.sum(dh, axis=1).reshape(self.dim, 1)
             dh_next = dh
 
-            self.vectors[self.sequence[i]] -= rate * dh
+        self.dwxh = self.clip_gradient(dwxh / self.batchsize)
+        self.dwhh = self.clip_gradient(dwhh / self.batchsize)
+        self.db = self.clip_gradient(db / self.batchsize)
 
-        self.dw = self.clip_gradient(dw)
-        self.db = self.clip_gradient(db)
-
-        self.weights -= rate * self.dw
+        self.wxh -= rate * self.dwxh
+        self.whh -= rate * self.dwhh
         self.bias -= rate * self.db
 
     def get_root_embedding(self):
         '''Returns the embedding for the final/root node in the sequence.'''
-        return self.hs[len(self.sequence)-1]
+        return self.hs[self.maxlen - 1]

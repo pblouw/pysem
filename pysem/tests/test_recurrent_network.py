@@ -1,5 +1,4 @@
 import os
-import random
 
 import numpy as np
 
@@ -40,10 +39,10 @@ def test_forward_pass():
     dim = 50
 
     rnn = RecurrentNetwork(dim=dim, vocab=snli.vocab)
-    sample = next(snli.train_data)
-    sen = random.choice(sample)
+    sens = [next(snli.train_data) for _ in range(5)]
+    sens = [item.sentence1 for item in sens]
 
-    rnn.forward_pass(sen)
+    rnn.forward_pass(sens)
     sen_vec = rnn.get_root_embedding()
 
     assert isinstance(sen_vec, np.ndarray)
@@ -58,20 +57,20 @@ def test_backward_pass():
     eps = 0.5
 
     rnn = RecurrentNetwork(dim=dim, vocab=snli.vocab)
-    sample = next(snli.train_data)
-    sen = random.choice(sample)
+    sens = [next(snli.train_data) for _ in range(5)]
+    sens = [item.sentence1 for item in sens]
 
-    error_grad = np.random.random((dim, 1)) * 2 * eps - eps
+    error_grad = np.random.random((dim, 5)) * 2 * eps - eps
 
-    rnn.forward_pass(sen)
+    rnn.forward_pass(sens)
 
     # Save a copy of the weights before SGD update
-    weights = np.copy(rnn.weights)
+    weights = np.copy(rnn.whh)
 
     # Do backprop
     rnn.backward_pass(error_grad, rate=0.1)
 
-    new_weights = np.copy(rnn.weights)
+    new_weights = np.copy(rnn.whh)
 
     # Check that every weight has changed after the SGD update
     assert np.count_nonzero(weights - new_weights) == weights.size
@@ -89,18 +88,17 @@ def test_weight_gradients():
     rnn = RecurrentNetwork(dim=dim, vocab=snli.vocab)
     logreg = LogisticRegression(n_features=dim, n_labels=n_labels)
 
-    sample = next(snli.train_data)
-    xs = random.choice(sample)
-    ys = np.zeros(n_labels)
-    ys[np.random.randint(0, n_labels, 1)] = 1
-    ys = ys.reshape(n_labels, 1)
+    xs = [next(snli.train_data) for _ in range(5)]
+    xs = [item.sentence1 for item in xs]
+    ys = np.zeros((n_labels, 5))
+    ys[np.random.randint(0, n_labels, 5), list(range(5))] = 1
 
     rnn.forward_pass(xs)
 
     # Use random weight in each matrix for n numerical gradient checks
     for _ in range(n_gradient_checks):
-        idx = np.random.randint(0, rnn.weights.size, size=1)
-        params = rnn.weights.flat
+        idx = np.random.randint(0, rnn.whh.size, size=1)
+        params = rnn.whh.flat
 
         numerical = num_grad(rnn, params, idx, xs, ys, logreg)
 
@@ -109,7 +107,7 @@ def test_weight_gradients():
         logreg.train(rnn.get_root_embedding(), ys, rate=0.001)
 
         rnn.backward_pass(logreg.yi_grad, rate=0.001)
-        analytic = rnn.dw.flat[idx]
+        analytic = rnn.dwhh.flat[idx]
 
         assert np.allclose(analytic, numerical)
 
@@ -126,11 +124,10 @@ def test_embedding_gradients():
     rnn = RecurrentNetwork(dim=dim, vocab=snli.vocab)
     logreg = LogisticRegression(n_features=dim, n_labels=n_labels)
 
-    sample = next(snli.train_data)
-    xs = random.choice(sample)
-    ys = np.zeros(n_labels)
-    ys[np.random.randint(0, n_labels, 1)] = 1
-    ys = ys.reshape(n_labels, 1)
+    xs = [next(snli.train_data) for _ in range(5)]
+    xs = [item.sentence1 for item in xs]
+    ys = np.zeros((n_labels, 5))
+    ys[np.random.randint(0, n_labels, 5), list(range(5))] = 1
 
     rnn.forward_pass(xs)
 
