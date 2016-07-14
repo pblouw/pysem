@@ -55,8 +55,8 @@ class RecursiveModel(object):
     def gaussian_id(dim):
         '''Returns an identity matrix with gaussian noise added.'''
         identity = np.eye(dim)
-        gaussian = np.random.normal(loc=0, scale=0.05, size=(dim, dim))
-        return identity + gaussian
+        # gaussian = np.random.normal(loc=0, scale=0.05, size=(dim, dim))
+        return identity  # + gaussian
 
     @staticmethod
     def random_weights(dim):
@@ -323,12 +323,13 @@ class RecurrentNetwork(RecursiveModel):
         Matches each vocabulary item with a vector embedding that is learned
         over the course of training the network.
     """
-    def __init__(self, dim, vocab, eps=0.3, pretrained=False):
+    def __init__(self, dim, vocab, eps=0.2):
         self.dim = dim
         self.vocab = vocab
-        self.indices = {word: idx for idx, word in enumerate(self.vocab)}
+        self.wrd_to_idx = {word: idx for idx, word in enumerate(self.vocab)}
 
-        self.whh = self.random_weights(dim)
+        self.whh = self.gaussian_id(dim)
+        self.why = self.gaussian_id(dim)
         self.wxh = np.random.random((dim, len(self.vocab))) * 2 * eps - eps
 
         self.xs, self.hs = {}, {}
@@ -345,35 +346,36 @@ class RecurrentNetwork(RecursiveModel):
     def to_array(self, tokens):
         array = np.zeros((len(self.vocab), len(tokens)))
         for _ in range(len(tokens)):
-            if tokens[_] == '':
+            if tokens[_] == 'PAD':
                 continue
             else:
-                idx = self.indices[tokens[_].lower()]
-                array[idx, _] = 1
-
+                try:
+                    idx = self.wrd_to_idx[tokens[_].lower()]
+                    array[idx, _] = 1
+                except KeyError:
+                    continue
         return array
 
     def compute_embeddings(self):
         '''Compute network hidden states for each item in the sequence.'''
-        self.hs[-1] = np.zeros((self.dim, len(self.minibatch)))
-        for i in range(self.maxlen):
-            inp_tokens = [sequence[i] for sequence in self.minibatch]
-            inp_array = self.to_array(inp_tokens)
+        self.hs[-1] = np.zeros((self.dim, len(self.batch)))
 
-            self.xs[i] = inp_array
-            x_input = np.dot(self.wxh, inp_array)
-            self.hs[i] = np.dot(self.whh, self.hs[i-1]) + x_input
+        for i in range(self.seqlen):
+            tokens = [sequence[i] for sequence in self.batch]
+            xs = self.to_array(tokens)
+            self.xs[i] = xs
+            self.hs[i] = np.dot(self.whh, self.hs[i-1]) + np.dot(self.wxh, xs)
             self.hs[i] = np.tanh(self.hs[i] + self.bias)
 
-    def forward_pass(self, minibatch):
+    def forward_pass(self, batch):
         '''Convert input sentences into sequence and compute hidden states.'''
-        self.minibatch = [nltk.word_tokenize(s) for s in minibatch]
-        self.maxlen = max([len(s) for s in self.minibatch])
-        self.batchsize = len(minibatch)
+        self.batch = [nltk.word_tokenize(sen) for sen in batch]
+        self.bsize = len(batch)
+        self.seqlen = max([len(s) for s in self.batch])
 
-        for x in range(len(self.minibatch)):
-            diff = self.maxlen - len(self.minibatch[x])
-            self.minibatch[x] = ['' for _ in range(diff)] + self.minibatch[x]
+        for x in range(len(self.batch)):
+            diff = self.seqlen - len(self.batch[x])
+            self.batch[x] = ['PAD' for _ in range(diff)] + self.batch[x]
 
         self.compute_embeddings()
 
@@ -382,14 +384,14 @@ class RecurrentNetwork(RecursiveModel):
         vectors before performing weight updates.'''
         error_grad = error_grad * self.tanh_grad(self.get_root_embedding())
 
+        dh_next = np.zeros_like(self.hs[0])
         dh = error_grad
         dwhh = np.zeros_like(self.whh)
         dwxh = np.zeros_like(self.wxh)
         db = np.zeros_like(self.bias)
-        dh_next = np.zeros_like(self.hs[0])
 
-        for i in reversed(range(self.maxlen)):
-            if i < self.maxlen - 1:
+        for i in reversed(range(self.seqlen)):
+            if i < self.seqlen - 1:
                 dh = np.dot(self.whh.T, dh_next)
                 dh = dh * self.tanh_grad(self.hs[i])
 
@@ -398,9 +400,9 @@ class RecurrentNetwork(RecursiveModel):
             db += np.sum(dh, axis=1).reshape(self.dim, 1)
             dh_next = dh
 
-        self.dwxh = self.clip_gradient(dwxh / self.batchsize)
-        self.dwhh = self.clip_gradient(dwhh / self.batchsize)
-        self.db = self.clip_gradient(db / self.batchsize)
+        self.dwxh = self.clip_gradient(dwxh / self.bsize)
+        self.dwhh = self.clip_gradient(dwhh / self.bsize)
+        self.db = self.clip_gradient(db / self.bsize)
 
         self.wxh -= rate * self.dwxh
         self.whh -= rate * self.dwhh
@@ -408,4 +410,4 @@ class RecurrentNetwork(RecursiveModel):
 
     def get_root_embedding(self):
         '''Returns the embedding for the final/root node in the sequence.'''
-        return self.hs[self.maxlen - 1]
+        return self.hs[self.seqlen - 1]
