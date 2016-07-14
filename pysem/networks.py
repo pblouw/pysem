@@ -334,6 +334,7 @@ class RecurrentNetwork(RecursiveModel):
 
         self.xs, self.hs = {}, {}
         self.bias = np.zeros((dim, 1))
+        self.ybias = np.zeros((dim, 1))
 
     def clip_gradient(self, gradient, clipval=5):
         '''Clip a large gradient so that its norm is equal to clipval.'''
@@ -367,6 +368,8 @@ class RecurrentNetwork(RecursiveModel):
             self.hs[i] = np.dot(self.whh, self.hs[i-1]) + np.dot(self.wxh, xs)
             self.hs[i] = np.tanh(self.hs[i] + self.bias)
 
+        self.ys = np.tanh(np.dot(self.why, self.hs[i]) + self.ybias)
+
     def forward_pass(self, batch):
         '''Convert input sentences into sequence and compute hidden states.'''
         self.batch = [nltk.word_tokenize(sen) for sen in batch]
@@ -384,11 +387,18 @@ class RecurrentNetwork(RecursiveModel):
         vectors before performing weight updates.'''
         error_grad = error_grad * self.tanh_grad(self.get_root_embedding())
 
-        dh_next = np.zeros_like(self.hs[0])
-        dh = error_grad
         dwhh = np.zeros_like(self.whh)
         dwxh = np.zeros_like(self.wxh)
+        dwhy = np.zeros_like(self.why)
         db = np.zeros_like(self.bias)
+        dby = np.zeros_like(self.ybias)
+
+        dwhy = np.dot(error_grad, self.hs[self.seqlen-1].T)
+        dby = np.sum(error_grad, axis=1).reshape(self.dim, 1)
+
+        dh_next = np.zeros_like(self.hs[0])
+        dh = np.dot(self.why.T, error_grad)
+        dh = dh * self.tanh_grad(self.hs[self.seqlen-1])
 
         for i in reversed(range(self.seqlen)):
             if i < self.seqlen - 1:
@@ -400,14 +410,18 @@ class RecurrentNetwork(RecursiveModel):
             db += np.sum(dh, axis=1).reshape(self.dim, 1)
             dh_next = dh
 
+        self.dwhy = self.clip_gradient(dwhy / self.bsize)
         self.dwxh = self.clip_gradient(dwxh / self.bsize)
         self.dwhh = self.clip_gradient(dwhh / self.bsize)
         self.db = self.clip_gradient(db / self.bsize)
+        self.dby = self.clip_gradient(dby / self.bsize)
 
+        self.why -= rate * self.dwhy
         self.wxh -= rate * self.dwxh
         self.whh -= rate * self.dwhh
         self.bias -= rate * self.db
+        self.ybias -= rate * self.dby
 
     def get_root_embedding(self):
-        '''Returns the embedding for the final/root node in the sequence.'''
-        return self.hs[self.seqlen - 1]
+        '''Returns the embeddings for the final/root node in the sequence.'''
+        return self.ys
