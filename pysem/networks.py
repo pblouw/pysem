@@ -323,18 +323,19 @@ class RecurrentNetwork(RecursiveModel):
         Matches each vocabulary item with a vector embedding that is learned
         over the course of training the network.
     """
-    def __init__(self, dim, vocab, eps=0.2):
+    def __init__(self, dim, vocab, eps=0.2, pretrained=False):
         self.dim = dim
         self.vocab = vocab
         self.wrd_to_idx = {word: idx for idx, word in enumerate(self.vocab)}
 
         self.whh = self.gaussian_id(dim)
         self.why = self.gaussian_id(dim)
-        self.wxh = np.random.random((dim, len(self.vocab))) * 2 * eps - eps
 
         self.xs, self.hs = {}, {}
-        self.bias = np.zeros((dim, 1))
-        self.ybias = np.zeros((dim, 1))
+        self.bh = np.zeros((dim, 1))
+        self.by = np.zeros((dim, 1))
+
+        self.pretrained_vecs(pretrained) if pretrained else self.random_vecs()
 
     def clip_gradient(self, gradient, clipval=5):
         '''Clip a large gradient so that its norm is equal to clipval.'''
@@ -344,31 +345,28 @@ class RecurrentNetwork(RecursiveModel):
 
         return gradient
 
-    def to_array(self, tokens):
-        array = np.zeros((len(self.vocab), len(tokens)))
-        for _ in range(len(tokens)):
-            if tokens[_] == 'PAD':
-                continue
-            else:
+    def to_array(self, words):
+        '''Compute input array from words in a given sequence position.'''
+        array = np.zeros((self.dim, self.bsize))
+        for idx, word in enumerate(words):
+            if word != 'PAD':
                 try:
-                    idx = self.wrd_to_idx[tokens[_].lower()]
-                    array[idx, _] = 1
+                    array[:, idx] = self.vectors[word.lower()].flatten()
                 except KeyError:
-                    continue
+                    pass
         return array
 
     def compute_embeddings(self):
         '''Compute network hidden states for each item in the sequence.'''
-        self.hs[-1] = np.zeros((self.dim, len(self.batch)))
+        self.hs[-1] = np.zeros((self.dim, self.bsize))
 
         for i in range(self.seqlen):
-            tokens = [sequence[i] for sequence in self.batch]
-            xs = self.to_array(tokens)
-            self.xs[i] = xs
-            self.hs[i] = np.dot(self.whh, self.hs[i-1]) + np.dot(self.wxh, xs)
-            self.hs[i] = np.tanh(self.hs[i] + self.bias)
+            words = [sequence[i] for sequence in self.batch]
+            self.xs[i] = words
+            self.hs[i] = np.dot(self.whh, self.hs[i-1]) + self.to_array(words)
+            self.hs[i] = np.tanh(self.hs[i] + self.bh)
 
-        self.ys = np.tanh(np.dot(self.why, self.hs[i]) + self.ybias)
+        self.ys = np.tanh(np.dot(self.why, self.hs[i]) + self.by)
 
     def forward_pass(self, batch):
         '''Convert input sentences into sequence and compute hidden states.'''
@@ -376,7 +374,7 @@ class RecurrentNetwork(RecursiveModel):
         self.bsize = len(batch)
         self.seqlen = max([len(s) for s in self.batch])
 
-        for x in range(len(self.batch)):
+        for x in range(self.bsize):
             diff = self.seqlen - len(self.batch[x])
             self.batch[x] = ['PAD' for _ in range(diff)] + self.batch[x]
 
@@ -388,10 +386,7 @@ class RecurrentNetwork(RecursiveModel):
         error_grad = error_grad * self.tanh_grad(self.get_root_embedding())
 
         dwhh = np.zeros_like(self.whh)
-        dwxh = np.zeros_like(self.wxh)
-        dwhy = np.zeros_like(self.why)
-        db = np.zeros_like(self.bias)
-        dby = np.zeros_like(self.ybias)
+        dbh = np.zeros_like(self.bh)
 
         dwhy = np.dot(error_grad, self.hs[self.seqlen-1].T)
         dby = np.sum(error_grad, axis=1).reshape(self.dim, 1)
@@ -405,23 +400,32 @@ class RecurrentNetwork(RecursiveModel):
                 dh = np.dot(self.whh.T, dh_next)
                 dh = dh * self.tanh_grad(self.hs[i])
 
-            dwxh += np.dot(dh, self.xs[i].T)
             dwhh += np.dot(dh_next, self.hs[i].T)
-            db += np.sum(dh, axis=1).reshape(self.dim, 1)
+            dbh += np.sum(dh, axis=1).reshape(self.dim, 1)
             dh_next = dh
 
+            for idx, word in enumerate(self.xs[i]):
+                if word != 'PAD':
+                    try:
+                        grad = dh[:, idx].reshape(self.dim, 1)
+                        self.vectors[word.lower()] -= rate * grad
+                    except KeyError:
+                        pass
+
         self.dwhy = self.clip_gradient(dwhy / self.bsize)
-        self.dwxh = self.clip_gradient(dwxh / self.bsize)
         self.dwhh = self.clip_gradient(dwhh / self.bsize)
-        self.db = self.clip_gradient(db / self.bsize)
+        self.dbh = self.clip_gradient(dbh / self.bsize)
         self.dby = self.clip_gradient(dby / self.bsize)
 
         self.why -= rate * self.dwhy
-        self.wxh -= rate * self.dwxh
         self.whh -= rate * self.dwhh
-        self.bias -= rate * self.db
-        self.ybias -= rate * self.dby
+        self.bh -= rate * self.dbh
+        self.by -= rate * self.dby
 
     def get_root_embedding(self):
         '''Returns the embeddings for the final/root node in the sequence.'''
         return self.ys
+
+
+class HolographicNetwork(RecursiveModel):
+    pass

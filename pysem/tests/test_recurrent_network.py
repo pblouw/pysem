@@ -112,7 +112,7 @@ def test_weight_gradients():
         assert np.allclose(analytic, numerical)
 
 
-def test_embedding_gradients():
+def test_bias_gradients():
     snli = SNLI(snli_path)
     snli.build_vocab()
     snli.extractor = snli.get_sentences
@@ -133,8 +133,8 @@ def test_embedding_gradients():
 
     # Use random weight in each matrix for n numerical gradient checks
     for _ in range(n_gradient_checks):
-        idx = np.random.randint(0, rnn.bias.size, size=1)
-        params = rnn.bias.flat
+        idx = np.random.randint(0, rnn.bh.size, size=1)
+        params = rnn.bh.flat
 
         numerical = num_grad(rnn, params, idx, xs, ys, logreg)
 
@@ -143,6 +143,6 @@ def test_embedding_gradients():
         logreg.train(rnn.get_root_embedding(), ys, rate=0.001)
 
         rnn.backward_pass(logreg.yi_grad, rate=0.001)
-        analytic = rnn.db.flat[idx]
+        analytic = rnn.dbh.flat[idx]
 
         assert np.allclose(analytic, numerical)
