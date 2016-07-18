@@ -5,3 +5,4 @@ flake8
 numpy
 spacy
 pytest-cov
+scikit-learn
