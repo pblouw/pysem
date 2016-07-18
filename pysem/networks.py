@@ -1,6 +1,5 @@
 import pickle
 import spacy
-import string
 import nltk
 
 import numpy as np
@@ -10,7 +9,6 @@ from pysem.utils.spacy import TokenWrapper
 from pysem.utils.vsa import normalize
 
 parser = spacy.load('en')
-punc_translator = str.maketrans({key: None for key in string.punctuation})
 
 
 def square_zeros(dim):
@@ -55,8 +53,8 @@ class RecursiveModel(object):
     def gaussian_id(dim):
         '''Returns an identity matrix with gaussian noise added.'''
         identity = np.eye(dim)
-        # gaussian = np.random.normal(loc=0, scale=0.05, size=(dim, dim))
-        return identity  # + gaussian
+        gaussian = np.random.normal(loc=0, scale=0.01, size=(dim, dim))
+        return identity + gaussian
 
     @staticmethod
     def random_weights(dim):
