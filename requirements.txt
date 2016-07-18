@@ -3,6 +3,7 @@ coverage
 nltk
 flake8
 numpy
+scipy
 spacy
 pytest-cov
 scikit-learn
