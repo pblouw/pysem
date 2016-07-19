@@ -30,6 +30,14 @@ def unitary_vector(dim):
     return np.fft.ifft(fft_unit).real
 
 
+def get_convolution_matrix(hrr):
+    d = len(hrr)
+    t = []
+    for i in range(d):
+        t.append([hrr[(i - j) % d] for j in range(d)])
+    return np.array(t)
+
+
 class HRR(object):
     """A holographic reduced representation, as defined by Plate (2003)."""
     def __init__(self, vector, unitary=False):

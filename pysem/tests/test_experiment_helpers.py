@@ -29,7 +29,7 @@ def test_bow_accuracy():
 
     acc = bow_accuracy(data, bow_classifier, bow_embedding_matrix, vectorizer)
 
-    assert 0.1 < acc < 0.4
+    assert 0 < acc < 0.5
 
 
 def test_rnn_accuracy():
@@ -45,7 +45,7 @@ def test_rnn_accuracy():
 
     acc = rnn_accuracy(data, rnn_classifier, s1_rnn, s2_rnn)
 
-    assert 0.1 < acc < 0.4
+    assert 0 < acc < 0.5
 
 
 def test_dnn_accuracy():
@@ -61,4 +61,4 @@ def test_dnn_accuracy():
 
     acc = dnn_accuracy(data, dnn_classifier, s1_dnn, s2_dnn)
 
-    assert 0.1 < acc < 0.4
+    assert 0 < acc < 0.5
