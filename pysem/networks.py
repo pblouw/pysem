@@ -141,7 +141,6 @@ class RecurrentNetwork(RecursiveModel):
     def __init__(self, dim, vocab, pretrained=False):
         self.dim = dim
         self.vocab = vocab
-        self.wrd_to_idx = {word: idx for idx, word in enumerate(self.vocab)}
 
         self.whh = self.gaussian_id(dim)
         self.why = self.gaussian_id(dim)
@@ -305,7 +304,7 @@ class DependencyNetwork(RecursiveModel):
         '''Clip a large gradient so that its norm is equal to clipval.'''
         norm = np.linalg.norm(node.gradient)
         if norm > clipval:
-            node.gradient = (node.gradient / norm) * 5
+            node.gradient = (node.gradient / norm) * clipval
 
     def compute_gradients(self):
         '''Compute gradients for every weight matrix and embedding by
@@ -485,7 +484,6 @@ class HolographicNetwork(DependencyNetwork):
 
         for dep in self.deps:
             self.weights[dep] = get_convolution_matrix(unitary_vector(dim))
-            self.biases[dep] = np.zeros((dim, 1))
 
     def embed_node(self, node, children):
         '''Computes the vector embedding for a node from the vector embeddings
@@ -544,7 +542,7 @@ class HolographicNetwork(DependencyNetwork):
             self.compute_gradients()
 
     def update_weights(self):
-        '''Use weight gradients to update the weights for each dependency,'''
-        for dep in self.biases:
+        '''Use weight gradients to update the weights for each dependency.'''
+        for dep in self.bgrads:
             depcount = len([True for node in self.tree if node.dep_ == dep])
             self.biases[dep] -= self.rate * self.bgrads[dep] / depcount
