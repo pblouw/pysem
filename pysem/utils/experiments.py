@@ -35,7 +35,7 @@ def bow_accuracy(data, classifier, embedding_matrix, vectorizer):
 
 
 def rnn_accuracy(data, classifier, s1_rnn, s2_rnn):
-    data = (x for x in data)
+    data = (x for x in data)  # convert to generator to use islice
     n_correct = 0
     n_total = 0
     batchsize = 100
@@ -66,6 +66,8 @@ def rnn_accuracy(data, classifier, s1_rnn, s2_rnn):
 
 def dnn_accuracy(data, classifier, s1_dnn, s2_dnn):
     count = 0
+    label_dict = {0: 'entailment', 1: 'neutral', 2: 'contradiction'}
+
     for sample in data:
         s1 = sample.sentence1
         s2 = sample.sentence2
@@ -78,9 +80,10 @@ def dnn_accuracy(data, classifier, s1_dnn, s2_dnn):
         s2 = s2_dnn.get_root_embedding()
 
         xs = np.concatenate((s1, s2))
-        ys = [label]
         prediction = classifier.predict(xs)
 
-        count += sum(np.equal(prediction, np.argmax(ys, axis=0)))
+        pred = label_dict[prediction[0]]
+        if pred == label:
+            count += 1
 
     return count / len(data)
