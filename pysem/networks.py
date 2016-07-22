@@ -40,7 +40,12 @@ class RecursiveModel(object):
             'dobj', 'relcl', 'nummod', 'mark', 'pcomp', 'conj', 'poss',
             'ccomp', 'oprd', 'acomp', 'neg', 'parataxis', 'dep', 'expl',
             'preconj', 'case', 'dative', 'prt', 'quantmod', 'meta', 'intj',
-            'csubj', 'predet', 'csubjpass', '']
+            'csubj', 'predet', 'csubjpass']
+
+    @staticmethod
+    def softmax(x):
+        '''Compute a softmax on the input vector.'''
+        return np.exp(x) / np.sum(np.exp(x), axis=0)
 
     @staticmethod
     def softplus(x):
