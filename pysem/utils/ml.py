@@ -163,10 +163,14 @@ class MultiLayerPerceptron(Model):
         cost = np.sum(-np.log(self.yo) * ys) / bsize
         self.costs.append(cost)
 
-    def predict(self, xs):
+    def predict(self, xs, sample=False):
         '''Predict labels associated with a set of input feature vectors.'''
         self.get_probs(xs)
-        return np.argmax(self.yo, axis=0)
+        if sample:
+            probs = self.yo.flatten()
+            return np.random.choice(np.arange(len(self.yo)), p=probs)
+        else:
+            return np.argmax(self.yo, axis=0)
 
     def get_cost(self, xs, ys):
         '''Evaluate cost of current parameters for gradient checking.'''
