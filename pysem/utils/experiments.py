@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 
 from pysem.corpora import SNLI
 from itertools import islice
@@ -87,3 +88,18 @@ def dnn_accuracy(data, classifier, s1_dnn, s2_dnn):
             count += 1
 
     return count / len(data)
+
+
+def plot(classifier, acc, acc_interval, scale=1):
+    interval = acc_interval * scale
+
+    fig, ax1 = plt.subplots()
+    ax2 = ax1.twinx()
+    ax1.plot(range(len(classifier.costs)), classifier.costs, 'b-')
+    ax2.plot(range(0, len(classifier.costs) + 1, interval), acc, 'r-')
+
+    ax1.set_xlabel('Minibatches')
+    ax1.set_ylabel('Cost', color='b')
+    ax2.set_ylabel('Dev Set Accuracy', color='r')
+
+    plt.show()
