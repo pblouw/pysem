@@ -7,3 +7,4 @@ scipy
 spacy
 pytest-cov
 scikit-learn
+matplotlib
