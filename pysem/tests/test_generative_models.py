@@ -33,9 +33,9 @@ def test_node_generator():
             if token.lower_ not in subvocabs[token.dep_]:
                 subvocabs[token.dep_].add(token.lower_)
 
-    dim = 100
+    dim = 50
     iters = 50
-    rate = 0.005
+    rate = 0.01
 
     encoder = DependencyNetwork(dim=dim, vocab=snli.vocab)
     decoder = NodeGenerator(dim=dim, subvocabs=subvocabs)
