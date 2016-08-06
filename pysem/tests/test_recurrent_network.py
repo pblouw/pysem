@@ -3,8 +3,6 @@ import string
 
 import numpy as np
 
-from pysem.corpora import SNLI
-from pysem.networks import RecurrentNetwork
 from pysem.utils.ml import LogisticRegression
 
 strip_pun = str.maketrans({key: None for key in string.punctuation})

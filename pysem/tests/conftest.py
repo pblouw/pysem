@@ -1,16 +1,11 @@
 import os
-import random
 import pytest
 
-import numpy as np
-
 from pysem.corpora import SNLI
-from pysem.networks import HolographicNetwork, RecurrentNetwork 
-from pysem.networks import DependencyNetwork
-from pysem.utils.ml import LogisticRegression
-
+from pysem.networks import RecurrentNetwork
 
 snli_path = os.getcwd() + '/pysem/tests/corpora/snli/'
+
 
 @pytest.fixture(scope='module')
 def snli():
