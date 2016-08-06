@@ -114,7 +114,6 @@ def test_weight_gradients():
 
         assert np.allclose(analytic, numerical)
 
-
         idx = np.random.randint(0, rnn.why.size, size=1)
         params = rnn.why.flat
 
