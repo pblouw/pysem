@@ -10,7 +10,7 @@ from collections import defaultdict
 from itertools import islice
 from operator import itemgetter
 from pysem.utils.multiprocessing import plainmap, PoolContainer
-from pysem.utils.vsa import convolve, deconvolve, HRR
+from pysem.utils.vsa import convolve, deconvolve, normalize, HRR
 
 tokenizer = nltk.load('tokenizers/punkt/english.pickle')
 stopwords = nltk.corpus.stopwords.words('english')
@@ -195,6 +195,31 @@ class OrderEmbedding(RandomIndexing):
         top_n = self.top_matches(probe, n, base_vectors=True)
         for item in top_n:
             print(item[0], item[1])
+
+    def get_resonants(self, phrase, n=5):
+        '''Print the n most likely words to occur in the specified position
+        relative to the provided phrase in order space'''
+        probe = self.get_vector_encoding(phrase)
+        top_n = self.top_matches(probe, n)
+        for item in top_n:
+            print(item[0], item[1])
+
+    def get_vector_encoding(self, phrase):
+        words = phrase.split()
+        index = words.index('__')
+        probe = np.zeros(self.dim)
+        for word in words:
+            if word == '__':
+                continue
+            w = readonly[word].v
+            if words.index(word) < index:
+                p = readonly.neg_idx[index-words.index(word)-1]
+                probe += convolve(w, p)
+            if words.index(word) > index:
+                p = readonly.pos_idx[words.index(word)-index-1]
+                probe += convolve(w, p)
+
+        return normalize(probe)
 
     def _config_readonly(self):
         global readonly
