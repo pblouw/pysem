@@ -34,14 +34,7 @@ def num_grad(model, params, idx, xs, ys, logreg, delta=1e-5):
     return numerical_gradient
 
 
-def test_forward_pass():
-    snli = SNLI(snli_path)
-    snli.build_vocab()
-    snli.extractor = snli.get_sentences
-
-    dim = 50
-
-    rnn = RecurrentNetwork(dim=dim, vocab=snli.vocab)
+def test_forward_pass(rnn, snli):
     sens = [next(snli.train_data) for _ in range(5)]
     sens = [item.sentence1 for item in sens]
 
@@ -51,15 +44,11 @@ def test_forward_pass():
     assert isinstance(sen_vec, np.ndarray)
 
 
-def test_backward_pass():
-    snli = SNLI(snli_path)
-    snli.build_vocab()
-    snli.extractor = snli.get_sentences
-
+def test_backward_pass(rnn, snli):
     dim = 50
     eps = 0.5
 
-    rnn = RecurrentNetwork(dim=dim, vocab=snli.vocab)
+    # rnn = RecurrentNetwork(dim=dim, vocab=snli.vocab)
     sens = [next(snli.train_data) for _ in range(5)]
     sens = [item.sentence1 for item in sens]
 
@@ -79,16 +68,11 @@ def test_backward_pass():
     assert np.count_nonzero(weights - new_weights) == weights.size
 
 
-def test_weight_gradients():
-    snli = SNLI(snli_path)
-    snli.build_vocab()
-    snli.extractor = snli.get_sentences
-
+def test_weight_gradients(rnn, snli):
     dim = 50
     n_labels = 3
     n_gradient_checks = 25
 
-    rnn = RecurrentNetwork(dim=dim, vocab=snli.vocab)
     logreg = LogisticRegression(n_features=dim, n_labels=n_labels)
 
     xs = [next(snli.train_data) for _ in range(5)]
@@ -129,16 +113,14 @@ def test_weight_gradients():
         assert np.allclose(analytic, numerical)
 
 
-def test_embedding_gradients():
-    snli = SNLI(snli_path)
-    snli.build_vocab()
+def test_embedding_gradients(rnn, snli):
+    snli.reset_streams()
     snli.extractor = snli.get_sentences
 
     dim = 50
     n_labels = 3
     n_gradient_checks = 25
 
-    rnn = RecurrentNetwork(dim=dim, vocab=snli.vocab)
     logreg = LogisticRegression(n_features=dim, n_labels=n_labels)
 
     xs = [next(snli.train_data) for _ in range(1)]
@@ -170,16 +152,11 @@ def test_embedding_gradients():
             assert np.allclose(analytic, numerical)
 
 
-def test_bias_gradients():
-    snli = SNLI(snli_path)
-    snli.build_vocab()
-    snli.extractor = snli.get_sentences
-
+def test_bias_gradients(rnn, snli):
     dim = 50
     n_labels = 3
     n_gradient_checks = 25
 
-    rnn = RecurrentNetwork(dim=dim, vocab=snli.vocab)
     logreg = LogisticRegression(n_features=dim, n_labels=n_labels)
 
     xs = [next(snli.train_data) for _ in range(5)]
