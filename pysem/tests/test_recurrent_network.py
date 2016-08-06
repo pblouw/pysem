@@ -1,10 +1,13 @@
 import os
+import string
 
 import numpy as np
 
 from pysem.corpora import SNLI
 from pysem.networks import RecurrentNetwork
 from pysem.utils.ml import LogisticRegression
+
+strip_pun = str.maketrans({key: None for key in string.punctuation})
 
 snli_path = os.getcwd() + '/pysem/tests/corpora/snli/'
 
@@ -112,6 +115,47 @@ def test_weight_gradients():
         assert np.allclose(analytic, numerical)
 
 
+def test_embedding_gradients():
+    snli = SNLI(snli_path)
+    snli.build_vocab()
+    snli.extractor = snli.get_sentences
+
+    dim = 50
+    n_labels = 3
+    n_gradient_checks = 25
+
+    rnn = RecurrentNetwork(dim=dim, vocab=snli.vocab)
+    logreg = LogisticRegression(n_features=dim, n_labels=n_labels)
+
+    xs = [next(snli.train_data) for _ in range(1)]
+    xs = [item.sentence1 for item in xs]
+    ys = np.zeros((n_labels, 1))
+    ys[np.random.randint(0, n_labels, 1), list(range(1))] = 1
+
+    rnn.forward_pass(xs)
+    words = xs[0].split()
+    words = [word.translate(strip_pun) for word in words]
+    words = [word.lower() for word in words]
+
+    # Use random element in each word embedding for n numerical gradient checks
+    for _ in range(n_gradient_checks):
+        for word in words:
+            print(word)
+            idx = np.random.randint(0, rnn.vectors[word].size, size=1)
+            params = rnn.vectors[word].flat
+
+            numerical = num_grad(rnn, params, idx, xs, ys, logreg)
+
+            rnn.forward_pass(xs)
+
+            logreg.train(rnn.get_root_embedding(), ys, rate=0.001)
+
+            rnn.backward_pass(logreg.yi_grad, rate=0.001)
+            analytic = rnn.dwrd[word].flat[idx]
+
+            assert np.allclose(analytic, numerical)
+
+
 def test_bias_gradients():
     snli = SNLI(snli_path)
     snli.build_vocab()
@@ -144,5 +188,19 @@ def test_bias_gradients():
 
         rnn.backward_pass(logreg.yi_grad, rate=0.001)
         analytic = rnn.dbh.flat[idx]
+
+        assert np.allclose(analytic, numerical)
+
+        idx = np.random.randint(0, rnn.by.size, size=1)
+        params = rnn.by.flat
+
+        numerical = num_grad(rnn, params, idx, xs, ys, logreg)
+
+        rnn.forward_pass(xs)
+
+        logreg.train(rnn.get_root_embedding(), ys, rate=0.001)
+
+        rnn.backward_pass(logreg.yi_grad, rate=0.001)
+        analytic = rnn.dby.flat[idx]
 
         assert np.allclose(analytic, numerical)

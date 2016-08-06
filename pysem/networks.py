@@ -40,7 +40,7 @@ class RecursiveModel(object):
             'dobj', 'relcl', 'nummod', 'mark', 'pcomp', 'conj', 'poss',
             'ccomp', 'oprd', 'acomp', 'neg', 'parataxis', 'dep', 'expl',
             'preconj', 'case', 'dative', 'prt', 'quantmod', 'meta', 'intj',
-            'csubj', 'predet', 'csubjpass']
+            'csubj', 'predet', 'csubjpass', '']
 
     @staticmethod
     def softmax(x):
@@ -155,6 +155,7 @@ class RecurrentNetwork(RecursiveModel):
         self.by = np.zeros((dim, 1))
 
         self.pretrained_vecs(pretrained) if pretrained else self.random_vecs()
+        self.dwrd = {}
 
     def clip_gradient(self, gradient, clipval=5):
         '''Clip a large gradient so that its norm is equal to clipval.'''
@@ -226,8 +227,9 @@ class RecurrentNetwork(RecursiveModel):
             for idx, word in enumerate(self.xs[i]):
                 if word != 'PAD':
                     try:
-                        grad = dh[:, idx].reshape(self.dim, 1)
-                        self.vectors[word.lower()] -= rate * grad
+                        item = word.lower()
+                        self.dwrd[item] = dh[:, idx].reshape(self.dim, 1)
+                        self.vectors[item] -= rate * self.dwrd[item]
                     except KeyError:
                         pass
 
