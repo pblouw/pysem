@@ -115,6 +115,21 @@ def test_weight_gradients():
         assert np.allclose(analytic, numerical)
 
 
+        idx = np.random.randint(0, rnn.why.size, size=1)
+        params = rnn.why.flat
+
+        numerical = num_grad(rnn, params, idx, xs, ys, logreg)
+
+        rnn.forward_pass(xs)
+
+        logreg.train(rnn.get_root_embedding(), ys, rate=0.001)
+
+        rnn.backward_pass(logreg.yi_grad, rate=0.001)
+        analytic = rnn.dwhy.flat[idx]
+
+        assert np.allclose(analytic, numerical)
+
+
 def test_embedding_gradients():
     snli = SNLI(snli_path)
     snli.build_vocab()
