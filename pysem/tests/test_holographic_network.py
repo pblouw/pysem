@@ -32,79 +32,62 @@ def num_grad(model, params, idx, xs, ys, logreg, delta=1e-5):
     return numerical_gradient
 
 
-def test_forward_pass():
-    snli = SNLI(snli_path)
-    snli.build_vocab()
-    snli.extractor = snli.get_sentences
-
-    dim = 50
-
-    depnet = HolographicNetwork(dim=dim, vocab=snli.vocab)
+def test_forward_pass(hnn, snli):
     sample = next(snli.train_data)
     sen = random.choice(sample)
 
-    depnet.forward_pass(sen)
-    sen_vec = depnet.get_root_embedding()
+    hnn.forward_pass(sen)
+    sen_vec = hnn.get_root_embedding()
 
     assert isinstance(sen_vec, np.ndarray)
 
-    for node in depnet.tree:
+    for node in hnn.tree:
         assert isinstance(node.embedding, np.ndarray)
 
 
-def test_backward_pass():
-    snli = SNLI(snli_path)
-    snli.build_vocab()
-    snli.extractor = snli.get_sentences
-
+def test_backward_pass(hnn, snli):
     dim = 50
     eps = 0.5
 
-    depnet = HolographicNetwork(dim=dim, vocab=snli.vocab)
     sample = next(snli.train_data)
     sen = random.choice(sample)
 
     error_grad = np.random.random((dim, 1)) * 2 * eps - eps
 
-    depnet.forward_pass(sen)
-    words = [node.lower_ for node in depnet.tree if node.lower_ in snli.vocab]
+    hnn.forward_pass(sen)
+    words = [node.lower_ for node in hnn.tree if node.lower_ in snli.vocab]
 
     # Save a copy of the word vectors before SGD update
     vectors = []
     for word in words:
-        vectors.append(np.copy(depnet.vectors[word]))
+        vectors.append(np.copy(hnn.vectors[word]))
 
     # Do backprop
-    depnet.backward_pass(error_grad, rate=0.1)
+    hnn.backward_pass(error_grad, rate=0.1)
 
     # Check that a gradient is computed for every word vector
-    for node in depnet.tree:
+    for node in hnn.tree:
         assert isinstance(node.gradient, np.ndarray)
 
     # Check that gradient norms are nonzero
     for word in words:
-        assert np.linalg.norm(depnet.vectors[word]) != 0
+        assert np.linalg.norm(hnn.vectors[word]) != 0
 
     # Save a copy of the word vectors after SGD update
     new_vectors = []
     for word in words:
-        new_vectors.append(np.copy(depnet.vectors[word]))
+        new_vectors.append(np.copy(hnn.vectors[word]))
 
     # Check that every word vector has changed after the SGD update
     for pair in zip(vectors, new_vectors):
         assert np.count_nonzero(pair[1] - pair[0]) == pair[0].size
 
 
-def test_embedding_gradients():
-    snli = SNLI(snli_path)
-    snli.build_vocab()
-    snli.extractor = snli.get_sentences
-
+def test_embedding_gradients(hnn, snli):
     dim = 50
     n_labels = 3
     n_gradient_checks = 25
 
-    depnet = HolographicNetwork(dim=dim, vocab=snli.vocab)
     logreg = LogisticRegression(n_features=dim, n_labels=n_labels)
 
     sample = next(snli.train_data)
@@ -113,24 +96,24 @@ def test_embedding_gradients():
     ys[np.random.randint(0, n_labels, 1)] = 1
     ys = ys.reshape(n_labels, 1)
 
-    depnet.forward_pass(xs)
-    words = [node.lower_ for node in depnet.tree if node.lower_ in snli.vocab]
+    hnn.forward_pass(xs)
+    words = [node.lower_ for node in hnn.tree if node.lower_ in snli.vocab]
 
     for _ in range(n_gradient_checks):
         for word in words:
-            idx = np.random.randint(0, depnet.vectors[word].size, size=1)
-            params = depnet.vectors[word].flat
+            idx = np.random.randint(0, hnn.vectors[word].size, size=1)
+            params = hnn.vectors[word].flat
 
-            numerical = num_grad(depnet, params, idx, xs, ys, logreg)
+            numerical = num_grad(hnn, params, idx, xs, ys, logreg)
 
-            depnet.forward_pass(xs)
+            hnn.forward_pass(xs)
 
-            logreg.train(depnet.get_root_embedding(), ys, rate=0.001)
+            logreg.train(hnn.get_root_embedding(), ys, rate=0.001)
 
             error_grad = logreg.yi_grad
 
-            depnet.backward_pass(error_grad, rate=0.001)
-            node = [node for node in depnet.tree if node.lower_ == word].pop()
+            hnn.backward_pass(error_grad, rate=0.001)
+            node = [node for node in hnn.tree if node.lower_ == word].pop()
             analytic = node.gradient.flat[idx]
 
             assert np.allclose(analytic, numerical)
