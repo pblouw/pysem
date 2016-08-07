@@ -4,6 +4,7 @@ import pytest
 from pysem.corpora import SNLI
 from pysem.networks import RecurrentNetwork, DependencyNetwork
 from pysem.networks import HolographicNetwork
+from pysem.generatives import EmbeddingGenerator
 
 snli_path = os.getcwd() + '/pysem/tests/corpora/snli/'
 
@@ -35,3 +36,26 @@ def hnn(snli):
     dim = 50
     hnn = HolographicNetwork(dim=dim, vocab=snli.vocab)
     return hnn
+
+
+@pytest.fixture(scope='module')
+def embedding_generator(snli):
+    dim = 25
+    data = [d for d in snli.train_data]
+
+    # build subvocabs for each dependency
+    subvocabs = {dep: set() for dep in DependencyNetwork.deps}
+
+    for sample in data:
+        s1_parse = DependencyNetwork.parser(sample.sentence1)
+        s2_parse = DependencyNetwork.parser(sample.sentence2)
+
+        for token in s1_parse:
+            if token.lower_ not in subvocabs[token.dep_]:
+                subvocabs[token.dep_].add(token.lower_)
+
+        for token in s2_parse:
+            if token.lower_ not in subvocabs[token.dep_]:
+                subvocabs[token.dep_].add(token.lower_)
+
+    return EmbeddingGenerator(dim=dim, subvocabs=subvocabs)

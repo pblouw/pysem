@@ -2,7 +2,6 @@ import os
 
 import numpy as np
 
-from pysem.corpora import SNLI
 from pysem.networks import RecurrentNetwork, DependencyNetwork
 from pysem.utils.ml import LogisticRegression
 from pysem.utils.experiments import bow_accuracy, rnn_accuracy, dnn_accuracy

@@ -1,22 +1,17 @@
-import spacy
-
 import numpy as np
 
 from collections import defaultdict
 from pysem.utils.spacy import TokenWrapper
 from pysem.networks import DependencyNetwork, square_zeros
 
-parser = spacy.load('en')
 
-
-class NodeGenerator(DependencyNetwork):
+class EmbeddingGenerator(DependencyNetwork):
     """
     A model that generates predictions for the words occupying each node in
     the dependency tree corresponding to a supplied sentence.
     """
     def __init__(self, dim, subvocabs):
         self.dim = dim
-        self.parser = parser
         self.weights = defaultdict(square_zeros(self.dim))
         self.wgrads = defaultdict(square_zeros(self.dim))
         self.subvocabs = subvocabs
