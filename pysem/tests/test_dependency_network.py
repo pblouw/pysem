@@ -4,8 +4,6 @@ import pytest
 
 import numpy as np
 
-from pysem.corpora import SNLI
-from pysem.networks import DependencyNetwork
 from pysem.utils.ml import LogisticRegression
 
 snli_path = os.getcwd() + '/pysem/tests/corpora/snli/'
@@ -34,8 +32,6 @@ def num_grad(model, params, idx, xs, ys, logreg, delta=1e-5):
 
 
 def test_token_wrapper(dnn, snli):
-    dim = 50
-
     sample = next(snli.train_data)
     sen = random.choice(sample)
 

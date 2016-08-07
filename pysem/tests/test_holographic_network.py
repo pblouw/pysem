@@ -3,8 +3,6 @@ import random
 
 import numpy as np
 
-from pysem.corpora import SNLI
-from pysem.networks import HolographicNetwork
 from pysem.utils.ml import LogisticRegression
 
 snli_path = os.getcwd() + '/pysem/tests/corpora/snli/'
