@@ -8,8 +8,6 @@ from collections import defaultdict
 from pysem.utils.spacy import TokenWrapper
 from pysem.utils.vsa import normalize, unitary_vector, get_convolution_matrix
 
-parser = spacy.load('en')
-
 
 def square_zeros(dim):
     '''Returns a function that produces a square array of zeros when called.
@@ -34,6 +32,8 @@ class RecursiveModel(object):
     dependency networks model sequences by recursively applying weights
     using tree structures.
     """
+    parser = spacy.load('en')
+
     deps = ['compound', 'punct', 'nsubj', 'ROOT', 'det', 'attr', 'cc',
             'npadvmod', 'appos', 'prep', 'pobj', 'amod', 'advmod', 'acl',
             'nsubjpass', 'auxpass', 'agent', 'advcl', 'aux', 'xcomp', 'nmod',
@@ -291,7 +291,6 @@ class DependencyNetwork(RecursiveModel):
     def __init__(self, dim, vocab, eps=0.3, pretrained=False):
         self.dim = dim
         self.vocab = sorted(list(vocab))
-        self.parser = parser
         self.biases = defaultdict(flat_zeros(self.dim))
         self.bgrads = defaultdict(flat_zeros(self.dim))
         self.weights = defaultdict(square_zeros(self.dim))
@@ -482,7 +481,6 @@ class HolographicNetwork(DependencyNetwork):
         sentence. Only computed when forward_pass is called on a sentence.
     """
     def __init__(self, dim, vocab):
-        self.parser = parser
         self.dim = dim
         self.vocab = sorted(list(vocab))
         self.weights = defaultdict(square_zeros(dim))

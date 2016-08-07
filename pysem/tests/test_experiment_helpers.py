@@ -9,13 +9,11 @@ from pysem.utils.experiments import bow_accuracy, rnn_accuracy, dnn_accuracy
 from sklearn.feature_extraction.text import CountVectorizer
 
 snli_path = os.getcwd() + '/pysem/tests/corpora/snli/'
-dim = 50
+dim = 25
 
 
-def test_bow_accuracy():
-    snli = SNLI(snli_path)
-    snli.build_vocab()
-
+def test_bow_accuracy(snli):
+    snli.reset_streams()
     snli.extractor = snli.get_xy_pairs
     data = [pair for pair in snli.train_data if pair.label != '-']
 
@@ -32,10 +30,8 @@ def test_bow_accuracy():
     assert 0 < acc < 0.65
 
 
-def test_rnn_accuracy():
-    snli = SNLI(snli_path)
-    snli.build_vocab()
-
+def test_rnn_accuracy(snli):
+    snli.reset_streams()
     snli.extractor = snli.get_xy_pairs
     data = [pair for pair in snli.train_data if pair.label != '-']
 
@@ -48,10 +44,8 @@ def test_rnn_accuracy():
     assert 0 < acc < 0.65
 
 
-def test_dnn_accuracy():
-    snli = SNLI(snli_path)
-    snli.build_vocab()
-
+def test_dnn_accuracy(snli):
+    snli.reset_streams()
     snli.extractor = snli.get_xy_pairs
     data = [pair for pair in snli.train_data if pair.label != '-']
 

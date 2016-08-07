@@ -6,7 +6,6 @@ import numpy as np
 from pysem.utils.ml import LogisticRegression
 
 strip_pun = str.maketrans({key: None for key in string.punctuation})
-
 snli_path = os.getcwd() + '/pysem/tests/corpora/snli/'
 
 
