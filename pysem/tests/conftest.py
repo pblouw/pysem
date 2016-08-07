@@ -4,7 +4,7 @@ import pytest
 from pysem.corpora import SNLI
 from pysem.networks import RecurrentNetwork, DependencyNetwork
 from pysem.networks import HolographicNetwork
-from pysem.generatives import EmbeddingGenerator
+from pysem.generatives import EmbeddingGenerator, TreeGenerator
 
 snli_path = os.getcwd() + '/pysem/tests/corpora/snli/'
 
@@ -59,3 +59,9 @@ def embedding_generator(snli):
                 subvocabs[token.dep_].add(token.lower_)
 
     return EmbeddingGenerator(dim=dim, subvocabs=subvocabs)
+
+
+@pytest.fixture(scope='module')
+def tree_generator(snli):
+    dim = 50
+    return TreeGenerator(dim=dim, vocab=snli.vocab)
