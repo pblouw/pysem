@@ -220,7 +220,8 @@ class TreeGenerator(DependencyNetwork):
 
                 if parent in self.sequence and parent.computed:
                     ctx = [node.head.lower_, node.dep_, node.lower_]
-                    self.x_emb = sum([np.copy(self.vectors[c]) for c in ctx])
+                    self.x_emb = sum([np.copy(self.vectors[c]) for c in ctx
+                                      if c in self.vectors])
                     self.compute_embeddings(node)
                     self.sequence.append(node)
 
