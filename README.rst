@@ -15,45 +15,50 @@ and recognizing textual entailment. The
 
 
 Features:
-=========
+---------
 
 * Text Corpora: Streams of Wikipedia articles or sentences with options for preprocessing and caching.
   Tools for using the Stanford Natural Language Inference corpus for recognizing textual entailment. 
 
-* Word Embeddings: random indexing with options for encoding information concerning word order and
-dependency syntax. Fully parallelized with Python's multiprocessing module.
+* Word Embeddings: random indexing with options for encoding information concerning word order and 
+  dependency syntax. Fully parallelized with Python's multiprocessing module.
 
 * Standard ML Tools: logistic regression, multilayer perceptron.
 
 * Neural Networks: standard RNNs and TreeRNNs (i.e. recursive neural networks), along with a TreeRNN
-variant that learns to encode a "Holographic Reduced Representation" (Plate 2003) of an input sentence. 
+  variant that learns to encode a "Holographic Reduced Representation" (Plate 2003) of an input sentence. 
 
-* Generative Modelling: experimental models that (a) learn the weights in a "decoding" TreeRNN to generate an embedding for each node in the tree, and (b) learn weights for a TreeRNN that generates both structure and
-and content simultaneously. 
+* Generative Modelling: experimental models that (a) learn the weights in a "decoding" TreeRNN to generate an 
+  embedding for each node in the tree, and (b) learn weights for a TreeRNN that generates both structure and
+  and content simultaneously. 
 
 Examples:
-=========
+---------
 
-In the examples directory, there Jupyter notebooks illustrating the creation of (a) embedding models from
-Wikipedia text, (b) classification models for predicting inferential relations betweeen sentences, and (c)
-generative models for generating sentences that are entailed by a given sentence. 
+In the examples directory, there Jupyter notebooks illustrating the creation of:
 
+* embedding models from Wikipedia text
 
-Requirements:
-=============
+* classification models for predicting inferential relations betweeen sentences
 
-Pysem requires Python 3, mostly to support effective multiprocessing. Further requirements include numpy, scipy, matplotlib, scikit-learn, and spacy (a highly efficient dependency parser).
+* generative models for generating sentences that are entailed by a given sentence. 
 
 
-Installation:
-=============
+Installation
+-------------
 
-After installing the requirements listed in requirements.txt, just run::
- 	python setup.py develop
+Pysem requires Python 3, mostly to support effective multiprocessing. To install other requirements and library itself, do the following:
+
+```
+pip install -r requirements.txt
+python setup.py develop --user
+```
+
+The '--user' flag can be omitted if you are using virtualenv or something equivalent. 
 
 
 Testing:
-========
+--------
 
 All of the machine learning and neural network models are tested with comprehensive gradient checks to
 ensure that they are implemented correctly. Most other components of the library are tested as well.
