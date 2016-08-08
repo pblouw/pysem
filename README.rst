@@ -11,7 +11,9 @@ PySem: Natural Language Semantics in Python
 
 A suite of tools for doing NLP with distributed representations, with a
 specific focus on natural language inference tasks such as question answering
-and recognizing textual entailment. The 
+and recognizing textual entailment. These tools range from implementations of
+existing algorithms and techniques, to novel algorithms for generating sentences
+that follow from a given sentence.
 
 
 Features:
@@ -35,7 +37,7 @@ Features:
 Examples:
 ---------
 
-In the examples directory, there Jupyter notebooks illustrating the creation of:
+In the examples directory, there are Jupyter notebooks illustrating the creation of:
 
 * embedding models from Wikipedia text
 
@@ -49,12 +51,13 @@ Installation
 
 Pysem requires Python 3, mostly to support effective multiprocessing. To install other requirements and library itself, do the following:
 
-```
+``
 pip install -r requirements.txt
-python setup.py develop --user
-```
 
-The '--user' flag can be omitted if you are using virtualenv or something equivalent. 
+python setup.py develop --user
+``
+
+The --user flag can be omitted if you are using virtualenv or something equivalent. 
 
 
 Testing:
@@ -62,3 +65,4 @@ Testing:
 
 All of the machine learning and neural network models are tested with comprehensive gradient checks to
 ensure that they are implemented correctly. Most other components of the library are tested as well.
+Testing is performed using py.test.
