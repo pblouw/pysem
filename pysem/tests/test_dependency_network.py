@@ -161,6 +161,7 @@ def test_embedding_gradients(dnn, snli):
 
     for _ in range(n_gradient_checks):
         for word in words:
+            print(_, word)
             idx = np.random.randint(0, dnn.vectors[word].size, size=1)
             params = dnn.vectors[word].flat
 
@@ -175,7 +176,8 @@ def test_embedding_gradients(dnn, snli):
 
             dnn.backward_pass(error_grad, rate=0.001)
             node = [node for node in dnn.tree if node.lower_ == word].pop()
-            analytic = node.gradient.flat[idx]
+
+            analytic = node.e_grad.flat[idx]
 
             assert np.allclose(analytic, numerical)
 
