@@ -318,27 +318,21 @@ class DependencyNetwork(RecursiveModel):
         whose parents have been computed. Recursion terminates when every
         embedding and weight matrix has a gradient.'''
         for node in self.tree:
-            if not self.has_children(node):
-                continue
+            parent = self.get_parent(node)
 
-            if node.computed:
-                self.clip_gradient(node)
-                children = self.get_children(node)
+            if not node.computed and parent.computed:
+                self.clip_gradient(parent)
 
-                for child in children:
-                    if child.computed:
-                        continue
+                wgrad = np.outer(parent.gradient, node.embedding)
+                cgrad = np.dot(self.weights[node.dep_].T, parent.gradient)
 
-                    wgrad = np.outer(node.gradient, child.embedding)
-                    cgrad = np.dot(self.weights[child.dep_].T, node.gradient)
+                nlgrad = self.tanh_grad(node.embedding)
+                nlgrad = nlgrad.reshape((len(nlgrad), 1))
 
-                    nlgrad = self.tanh_grad(child.embedding)
-                    nlgrad = nlgrad.reshape((len(nlgrad), 1))
-
-                    self.wgrads[child.dep_] += wgrad
-                    self.bgrads[child.dep_] += node.gradient
-                    child.gradient = cgrad * nlgrad
-                    child.computed = True
+                self.wgrads[node.dep_] += wgrad
+                self.bgrads[node.dep_] += parent.gradient
+                node.gradient = cgrad * nlgrad
+                node.computed = True
 
         if all([node.computed for node in self.tree]):
             return
@@ -370,6 +364,7 @@ class DependencyNetwork(RecursiveModel):
         embedding.'''
         try:
             emb = np.copy(self.vectors[node.lower_])
+            # emb = np.dot(self.wmatrix, np.copy(self.vectors[node.lower_]))
         except KeyError:
             emb = np.zeros(self.dim).reshape((self.dim, 1))
 
@@ -422,6 +417,12 @@ class DependencyNetwork(RecursiveModel):
                 children.append(other_node)
 
         return children
+
+    def get_parent(self, node):
+        '''Get the node that is the parent of the supplied node'''
+        for other_node in self.tree:
+            if other_node.idx == node.head.idx:
+                return other_node
 
     def has_children(self, node):
         '''Check if node has children, return False for leaf nodes.'''
