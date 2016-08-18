@@ -324,7 +324,7 @@ class SICK(DataHandler):
 
     @entailment_pairs.setter
     def entailment_pairs(self):
-        raise Exception('SICK entailment data is cannot be modified')
+        raise Exception('SICK entailment data cannot be modified')
 
     @property
     def relatedness_pairs(self):
