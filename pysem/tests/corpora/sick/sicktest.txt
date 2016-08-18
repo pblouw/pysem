@@ -1,0 +1,173 @@
+pair_ID	sentence_A	sentence_B	relatedness_score	entailment_judgment
+1	A group of kids is playing in a yard and an old man is standing in the background	A group of boys in a yard is playing and a man is standing in the background	4.5	NEUTRAL
+2	A group of children is playing in the house and there is no man standing in the background	A group of kids is playing in a yard and an old man is standing in the background	3.2	NEUTRAL
+3	The young boys are playing outdoors and the man is smiling nearby	The kids are playing outdoors near a man with a smile	4.7	ENTAILMENT
+5	The kids are playing outdoors near a man with a smile	A group of kids is playing in a yard and an old man is standing in the background	3.4	NEUTRAL
+9	The young boys are playing outdoors and the man is smiling nearby	A group of kids is playing in a yard and an old man is standing in the background	3.7	NEUTRAL
+12	Two dogs are fighting	Two dogs are wrestling and hugging	4	NEUTRAL
+14	A brown dog is attacking another animal in front of the man in pants	Two dogs are fighting	3.5	NEUTRAL
+18	A brown dog is attacking another animal in front of the man in pants	Two dogs are wrestling and hugging	3.2	NEUTRAL
+25	Nobody is riding the bicycle on one wheel	A person in a black jacket is doing tricks on a motorbike	2.8	NEUTRAL
+26	A person is riding the bicycle on one wheel	A man in a black jacket is doing tricks on a motorbike	3.7	NEUTRAL
+28	A person on a black motorbike is doing tricks with a jacket	A person is riding the bicycle on one wheel	3.4	NEUTRAL
+30	A man with a jersey is dunking the ball at a basketball game	The ball is being dunked by a man with a jersey at a basketball game	4.9	ENTAILMENT
+35	A man with a jersey is dunking the ball at a basketball game	A man who is playing dunks the basketball into the net and a crowd is in background	3.6	NEUTRAL
+40	The player is dunking the basketball into the net and a crowd is in background	A man with a jersey is dunking the ball at a basketball game	3.8	NEUTRAL
+42	Two people are kickboxing and spectators are not watching	Two people are kickboxing and spectators are watching	3.4	CONTRADICTION
+44	Two young women are sparring in a kickboxing fight	Two women are sparring in a kickboxing match	4.9	ENTAILMENT
+45	Two young women are not sparring in a kickboxing fight	Two women are sparring in a kickboxing match	3.9	NEUTRAL
+47	Two people are kickboxing and spectators are watching	Two young women are not sparring in a kickboxing fight	3.415	NEUTRAL
+49	Two women are sparring in a kickboxing match	Two people are kickboxing and spectators are not watching	3.7	NEUTRAL
+55	Three boys are jumping in the leaves	Three kids are jumping in the leaves	4.4	ENTAILMENT
+56	Three kids are sitting in the leaves	Three kids are jumping in the leaves	3.8	NEUTRAL
+58	Children in red shirts are playing in the leaves	Three kids are sitting in the leaves	3.5	NEUTRAL
+62	Children in red shirts are playing in the leaves	Three kids are jumping in the leaves	4	NEUTRAL
+65	Two angels are making snow on the lying children	Two children are lying in the snow and are making snow angels	2.9	NEUTRAL
+70	Two children are lying in the snow and are drawing angels	Two people in snowsuits are lying in the snow and making snow angels	4.1	NEUTRAL
+72	Two people in snowsuits are lying in the snow and making snow angels	Two angels are making snow on the lying children	2.5	NEUTRAL
+73	Two children are lying in the snow and are making snow angels	Two people in snowsuits are lying in the snow and making snow angels	4.2	NEUTRAL
+77	People wearing costumes are gathering in a forest and are looking in the same direction	Masked people are looking in the same direction in a forest	4.4	ENTAILMENT
+78	People wearing costumes are gathering in a forest and are looking in the same direction	People wearing costumes are scattering in a forest and are looking in different directions	3.2	NEUTRAL
+79	People are looking at some costumes gathered in the vicinity of the forest	People wearing costumes are gathering in a forest and are looking in the same direction	3.635	NEUTRAL
+81	A little girl is looking at a woman in costume	People wearing costumes are scattering in a forest and are looking in different directions	2.4	NEUTRAL
+82	A little girl is looking at a woman in costume	People are looking at some costumes gathered in the vicinity of the forest	2.6	NEUTRAL
+83	A young girl is looking at a woman in costume	People wearing costumes are gathering in a forest and are looking in the same direction	2.2	NEUTRAL
+84	People wearing costumes are gathering in a forest and are looking in the same direction	The little girl is looking at a man in costume	3	NEUTRAL
+85	People wearing costumes are gathering in a forest and are looking in the same direction	A little girl in costume looks like a woman	2	NEUTRAL
+87	A lone biker is jumping in the air	A biker is jumping in the air, alone	5	ENTAILMENT
+88	There is no biker jumping in the air	A lone biker is jumping in the air	4.2	CONTRADICTION
+90	A man is jumping into an empty pool	A man is jumping into a full pool	3	CONTRADICTION
+91	A man is jumping into an empty pool	The man's jumper is in the empty pool	3.1	NEUTRAL
+93	A lone biker is jumping in the air	A man is jumping into a full pool	1.7	NEUTRAL
+94	The man's jumper is in the empty pool	A lone biker is jumping in the air	1.4	NEUTRAL
+97	A lone biker is jumping in the air	A man is jumping into an empty pool	1.5	NEUTRAL
+98	Four kids are doing backbends in the park	Four children are doing backbends in the park	4.8	ENTAILMENT
+99	Four children are doing backbends in the gym	Four children are doing backbends in the park	3.8	NEUTRAL
+100	Four girls are doing backbends and playing in the garden	Four girls are doing backbends and playing outdoors	4.1	ENTAILMENT
+107	A man who is playing is running with the ball in his hands	A player is running with the ball	4.3	ENTAILMENT
+112	Two groups of people are playing football	A player is running with the ball	2.1	NEUTRAL
+113	Two teams are competing in a baseball game	A player is running with the ball	3	NEUTRAL
+117	A player is running with the ball	Two teams are competing in a football match	2.6	NEUTRAL
+120	Five wooden stands are in front of each child's hut	Five children are standing in front of a wooden hut	3.2	NEUTRAL
+122	Five kids are standing close together and one kid has a gun	Five kids are standing close together and none of the kids has a gun	3.7	CONTRADICTION
+124	Five kids are standing close together and none of the kids has a gun	Five children are standing in front of a wooden hut	2.6	NEUTRAL
+126	Five children are standing in a wooden hut	Five kids are standing close together and one kid has a gun	2.7	NEUTRAL
+127	Five wooden stands are in front of each child's hut	Five kids are standing close together and one kid has a gun	2.3	NEUTRAL
+129	An old man is sitting in a field	A man is sitting in a field	4.4	ENTAILMENT
+130	A man is sitting in a field	A man is running in a field	2.6	NEUTRAL
+131	A person is wearing a hat and is sitting on the grass	A person is sitting in a field and is wearing a hat	4.1	NEUTRAL
+133	A person is sitting and wearing a grass hat	A person is wearing a hat and is sitting on the grass	3.4	NEUTRAL
+136	A person is sitting and wearing a grass hat	A man is sitting in a field	3.3	NEUTRAL
+139	A man is sitting in a field	A person is wearing a hat and is sitting on the grass	3.8	NEUTRAL
+140	The current is being ridden by a group of friends in a raft	A group of friends are riding the current in a raft	4.9	ENTAILMENT
+141	A group of friends are riding the current in a raft	A group is not riding the current in a raft	3.7	CONTRADICTION
+146	The current is being ridden by a group of friends in a raft	This group of people is practicing water safety and wearing preservers	3.2	NEUTRAL
+148	A group of friends are riding the current in a raft	This group of people is practicing water safety and wearing preservers	3.1	NEUTRAL
+150	A deer is jumping over a fence	A deer isn't jumping over the fence	3.9	CONTRADICTION
+159	People are walking inside a building that has many murals on it	People are walking outside a building that has many murals on it	3.4	NEUTRAL
+161	Several people are in front of a colorful building	Nobody is in front of the colorful building	3.5	CONTRADICTION
+163	People are walking outside a building that has many murals on it	Nobody is in front of the colorful building	3.6	NEUTRAL
+164	People are walking outside the building that has several murals on it	Several people are in front of a colorful building	3.6	ENTAILMENT
+170	A family is watching a little boy who is hitting a baseball	A family is watching a little boy who is missing a baseball	3.9	NEUTRAL
+173	A child is hitting a baseball	A family is watching a little boy who is missing a baseball	3.015	NEUTRAL
+176	A child is missing a baseball	A family is watching a little boy who is hitting a baseball	2.7	NEUTRAL
+183	A purple crowd of people is eating on various red lit restaurant tables	Various people are eating at red tables in a crowded restaurant with purple lights	3.3	NEUTRAL
+184	A large group of Asian people is eating at a restaurant	Various customers are eating in a crowded restaurant with purple lights	2.9	NEUTRAL
+186	A purple crowd of people is eating on various red lit restaurant tables	A large group of Asian people is eating at a restaurant	3.1	NEUTRAL
+188	Various people are eating at red tables in a crowded restaurant with purple lights	A small group of people is waiting to eat in a restaurant	3.2	NEUTRAL
+192	A motorcycle rider is standing up on the seat of a white motorcycle	No motorcycle rider is standing up on the seat of a motorcycle	3.8	CONTRADICTION
+194	Nobody is on a motorcycle and is standing on the seat	Someone is on a black and white motorcycle and is standing on the seat	3.7	CONTRADICTION
+200	A motorcyclist is riding a motorbike dangerously along a roadway	A motorcyclist is riding a motorbike along a roadway	4.6	ENTAILMENT
+201	There is no motorcyclist riding a motorbike along a roadway	A motorcyclist is riding a motorbike along a roadway	3.7	CONTRADICTION
+202	A man with a helmet painted red is riding a blue motorcycle down the road	A motorcyclist with a red helmet is riding a blue motorcycle down the road	4.8	ENTAILMENT
+205	A motorcyclist without a helmet is waiting on a blue motorcycle near the road	A motorcyclist is riding a motorbike along a roadway	3.3	NEUTRAL
+215	Two dogs are playing by a tree	A dog is catching a stick in the air and another is watching	3.7	NEUTRAL
+216	Two dogs are playing by a tree	There is no dog leaping in the air	2.7	NEUTRAL
+217	Two dogs are playing by a tree	A dog is leaping high in the air and another is watching	3	NEUTRAL
+223	A girl in white is dancing	The dancer is dancing in front of the sound equipment	4	NEUTRAL
+224	A girl in white is dancing	The blond girl is dancing behind the sound equipment	3.3	NEUTRAL
+226	A girl is wearing white clothes and is dancing	The blond girl is dancing in front of the sound equipment	3.5	NEUTRAL
+227	The blond girl is dancing in front of the sound equipment	There is no girl in white dancing	3.3	NEUTRAL
+232	Three Asian kids are dancing and a man is looking	Three Asian kids are dancing and there is no man looking	3.9	CONTRADICTION
+233	Three Asian kids are dancing and a man is looking	An Asian man is dancing and three kids are looking	3.7	NEUTRAL
+234	The children of a family are playing and waiting	Three Asian kids are dancing and a serious man is looking	1.9	NEUTRAL
+237	The children of a family are patiently playing and waiting	Three Asian kids are dancing and a man is looking	2.3	NEUTRAL
+238	There are no children playing and waiting	Three Asian kids are dancing and a man is looking	1.6	NEUTRAL
+240	A woman is wearing an Egyptian hat on her head	A woman is wearing an Egyptian headdress	4.3	ENTAILMENT
+241	A woman is wearing an Egyptian headdress	A woman is wearing an Indian headdress	4	NEUTRAL
+248	The black woman is wearing glasses over the headdress	A woman is wearing an Egyptian headdress	3.6	NEUTRAL
+249	A woman is wearing an Egyptian hat on her head	The woman is wearing glasses and a black headdress	2.5	NEUTRAL
+254	A hiker is on top of the mountain and is dancing	There is no hiker dancing on top of the mountain	3.2	CONTRADICTION
+256	There is no man on a rock high above some trees standing in a strange position	A man is on a rock high above some trees and is standing in a strange position	4.3	CONTRADICTION
+257	A hiker is on top of the mountain and is dancing	A man is on a rock high above some trees and is standing in an uncomfortable position	2.5	NEUTRAL
+258	A hiker is on top of the mountain and is dancing	There is no man on a rock high above some trees standing in a strange position	2.5	NEUTRAL
+259	A man is on a rock high above some trees and is standing in a strange position	A hiker is on top of the mountain and is doing a joyful dance	2.9	NEUTRAL
+260	There is no hiker dancing on top of the mountain	A man is on a rock high above some trees and is standing in a strange position	2.4	NEUTRAL
+265	The brown horse is very near a red barrel at the rodeo	The brown horse is near a red barrel at the rodeo	4.8	ENTAILMENT
+266	The brown horse is near a red barrel at the rodeo	The brown horse is far from a red barrel at the rodeo	3.6	CONTRADICTION
+269	A cowgirl is riding a brown horse and is cornering a barrel	The brown horse is near a red barrel at the rodeo	3.2	NEUTRAL
+272	A cowgirl is riding a horse and corners a barrel	The brown horse is near a red barrel at the rodeo	3.8	NEUTRAL
+273	A boy is standing in the cold water	A boy is standing in the water	4.1	ENTAILMENT
+276	The boy is sitting near the blue ocean	The boy is wading through the blue ocean	3.2	CONTRADICTION
+277	A boy is standing in the water	The kid is swimming through the blue ocean	3	NEUTRAL
+279	The boy is wading through the blue ocean	A boy is standing in the cold water	3.3	NEUTRAL
+283	A man is playing a guitar on stage	There is no man playing a guitar on stage	3.6	CONTRADICTION
+286	A man is playing a guitar on stage	A guitarist has blonde and flyaway hair	3	NEUTRAL
+287	A man is playing a guitar on stage	A bald person is playing a guitar	3.8	NEUTRAL
+289	There is no man playing a guitar on stage	A person has blonde and flyaway hair and is playing a guitar	3.4	NEUTRAL
+291	Several children are sitting down and have their knees raised	Several children are lying down and are raising their knees	4	NEUTRAL
+293	Two young girls are sitting on the ground	Two girls are sitting on the ground	4.4	ENTAILMENT
+296	Two girls are lying on the ground	Several children are sitting down and have their knees raised	2.8	NEUTRAL
+301	A nude lady is walking in front of a crowd in body paint	There is no lady walking in body paint in front of a crowd 	2.9	CONTRADICTION
+302	A nude lady is walking in front of a crowd in body paint	A nude crowd in body paint is walking in front of a lady 	3.1	NEUTRAL
+303	A young, topless woman is covered in paint	A topless girl is covered in paint	4.4	ENTAILMENT
+305	A nude lady is walking in front of a crowd in body paint	A topless girl is covered in paint	3.8	ENTAILMENT
+309	A nude crowd in body paint is walking in front of a lady 	A young, topless woman is covered in paint	3	NEUTRAL
+310	A nude lady is walking in front of a crowd in body paint	A young, topless woman is covered in paint	4.2	NEUTRAL
+311	A group of people is near the ocean	A crowd of people is near the water	4.3	ENTAILMENT
+312	A crowd of people is near the water	A crowd of people is far from the water	3.8	CONTRADICTION
+313	A group of children in uniforms is standing at a gate and one is kissing the mother	A group of children wearing the same clothes is waiting at a gate and one is kissing the mother	4.5	ENTAILMENT
+315	A group of mothers in uniforms is standing near the children and one is kissing the gate	A group of children in uniforms is standing at a gate and one is kissing the mother	3.3	NEUTRAL
+323	A man is in a parking lot and is playing tennis against a large wall	A man is in a parking lot and is playing tennis against a friend	3.9	NEUTRAL
+327	A man is in a parking lot and is playing tennis against a large wall	There is no man pointing at a car	1.5	NEUTRAL
+329	A man is in a parking lot and is playing tennis against a friend	A man is pointing at a silver sedan	1.3	NEUTRAL
+331	A group of people is on a beach	A group of people is near the sea	4	ENTAILMENT
+332	A group of people is on a beach	A group of people is on a mountain	2.6	NEUTRAL
+333	A man, a woman and two girls are walking on the beach	Four people are walking on the beach	4.5	ENTAILMENT
+335	A group of people is on a beach	Four people are walking on the beach	4.6	NEUTRAL
+338	A man, a woman and two girls are walking on the beach	A group of people is on a mountain	1.4	NEUTRAL
+339	A man, a woman and two girls are walking on the beach	A group of people is on a beach	4.3	ENTAILMENT
+340	A schoolgirl with a black bag is on a crowded train	A girl with a black bag is on a crowded train	4.7	ENTAILMENT
+341	There is no girl with a black bag on a crowded train	A girl with a black bag is on a crowded train	3.7	CONTRADICTION
+342	A girl with a black bag is on a crowded train	A cramped black train is on the bag of a girl	2.7	NEUTRAL
+344	An Asian woman in a crowd is not carrying a black bag	An Asian woman in a crowd is carrying a black bag	3.8	NEUTRAL
+346	A girl with a black bag is on a crowded train	An Asian woman in a crowd is not carrying a black bag	2.5	NEUTRAL
+347	A schoolgirl with a black bag is on a crowded train	An Asian woman in a crowd is carrying a black bag	2.8	NEUTRAL
+351	A dog is chasing another and is holding a stick in its mouth	A dog is chasing another and is holding a piece of wood in its mouth	4.6	ENTAILMENT
+354	Two dogs are running and carrying a toy in their mouths	Two dogs are running and carrying an object in their mouths	4.3	ENTAILMENT
+358	A dog is chasing another and is holding a piece of wood in its mouth	Two dogs are running and carrying an object in their mouths	3.9	NEUTRAL
+360	Two dogs are running and carrying an object in their mouths	A dog is chasing a stick and holding another dog in its mouth	3.2	NEUTRAL
+361	A dog is chasing another and is holding a stick in its mouth	Two dogs are running and carrying an object in their mouths	4	ENTAILMENT
+362	A dirty soccer ball is rolling into a goal net	A soccer ball is rolling into a goal net	4.5	ENTAILMENT
+363	A soccer ball is not rolling into a goal net	A soccer ball is rolling into a goal net	3.4	CONTRADICTION
+366	A person who plays soccer is kicking a ball into the goal	A soccer ball is rolling into a goal net	4.1	NEUTRAL
+367	A soccer ball is rolling into a goal net	A soccer player is kicking a ball out of the goal	3.2	NEUTRAL
+370	A soccer ball is rolling into a goal net	A soccer player is kicking a ball into the goal	4.3	NEUTRAL
+372	A man is sitting on a chair and rubbing his eyes	There is no man sitting on a chair and rubbing his eyes	3.8	CONTRADICTION
+373	A man with tattoos is lounging on a couch and holding a pencil	A tattooed man is on a sofa and is holding a pencil	4.4	ENTAILMENT
+374	A man with tattoos is lounging on a couch and holding a pencil	A man with tattoos is lounging on a couch and is looking for a pencil	2.9	NEUTRAL
+375	A man with tattoos is holding a couch with a pencil	A man with tattoos is lounging on a couch and holding a pencil	2.6	NEUTRAL
+377	A man is sitting on a chair and rubbing his eyes	A man with tattoos is lounging on a couch and is looking for a pencil	2.1	NEUTRAL
+378	A man with tattoos is holding a couch with a pencil	A man is sitting on a chair and rubbing his eyes	2	NEUTRAL
+379	A man is resting on a chair and rubbing his eyes	A man with tattoos is lounging on a couch and holding a pencil	2.5	NEUTRAL
+380	A man with tattoos is lounging on a couch and holding a pencil	There is no man sitting on a chair and rubbing his eyes	1.6	NEUTRAL
+381	A man with tattoos is lounging on a couch and holding a pencil	A man is sitting on a chair and rubbing his eyes	2.4	NEUTRAL
+387	A brown and white dog is running through the tall grass	A black and tan dog is running through the low and green grass	3.8	NEUTRAL
+390	A white and tan dog is running through the tall and green grass	A brown and white dog is running through the tall grass	4.6	ENTAILMENT
+391	A man with paint covered clothes is sitting outside in a busy area writing something	A man is wearing clothes that are covered with paint and is sitting outside in a busy area writing something	4.8	ENTAILMENT
+392	There is no man wearing clothes that are covered with paint or is sitting outside in a busy area writing something	A man is wearing clothes that are covered with paint and is sitting outside in a busy area writing something	4.1	CONTRADICTION
+393	A sitting man is busy writing something in an area covered by paint	A man is wearing clothes that are covered with paint and is sitting outside in a busy area writing something	3.7	NEUTRAL
+395	A man is sitting near a bike and is writing a note	There is no man writing a note near a bike	4.2	CONTRADICTION
+396	A man is wearing clothes that are covered with paint and is sitting outside in a busy area writing something	A man is standing near a bike and is writing on a piece paper	2.6	NEUTRAL
+397	There is no man writing a note near a bike	A man is wearing clothes that are covered with paint and is sitting outside in a busy area writing something	2.7	NEUTRAL
+398	A man is sitting near a bike and is writing a note	A man with paint covered clothes is sitting outside in a busy area writing something	3.1	NEUTRAL
