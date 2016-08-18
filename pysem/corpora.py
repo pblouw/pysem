@@ -5,6 +5,7 @@ import sys
 import nltk
 import pickle
 import itertools
+import csv
 
 import numpy as np
 
@@ -129,7 +130,7 @@ class Wikipedia(DataHandler):
                 fpath = root + '/' + fname
                 with open(fpath, 'r', encoding='ascii', errors='ignore') as f:
                     articles = f.read().split('</doc>')
-                    for a in articles:
+                    for a in articles[1:]:
                         yield a if self.from_cache else self.preprocess(a)
 
     def _sentence_stream(self):
@@ -144,6 +145,7 @@ Sentences = namedtuple('Sentences', ['sentence1', 'sentence2'])
 Parses = namedtuple('Parses', ['parse1', 'parse2'])
 BinaryParses = namedtuple('BinaryParses', ['parse1', 'parse2'])
 TrainingPair = namedtuple('TrainingPair', ['sentence1', 'sentence2', 'label'])
+RelationPair = namedtuple('RelationPair', ['sentence1', 'sentence2', 'score'])
 
 
 class SNLI(DataHandler):
@@ -283,3 +285,87 @@ class SNLI(DataHandler):
 
     def _test_stream(self):
         return self._stream('snli_1.0_test.jsonl')
+
+
+class SICK(DataHandler):
+    """An iterface to the SICK corpus for natural language inference. The
+    dataset consists of 10,000 sentences pairs, and each pair is labelled with
+    an inferential relationship and relatedness score. Because the dataset is
+    small, streaming is not used; the data is all stored as a class attribute.
+
+    Parameters:
+    ----------
+    path : str
+        The absolute path to the directory containing the SICK corpus.
+
+    Attributes:
+    ----------
+    entailment_pairs : list of namedtuples
+        Each namedtuple has a field for sentence1, sentence2, entailment label
+    relatedness_pairs : list of namedtuples
+        Each namedtuple has a field for sentence1, sentence2, relation score
+    data : list of dicts
+        Each dict maps SICK fields to data for each sentence pair in corpus
+    """
+    def __init__(self, path):
+        self.data = []
+
+        with open(path) as f:
+            reader = csv.DictReader(f, delimiter='\t')
+            for row in reader:
+                self.data.append(row)
+
+        self._entailment_pairs = self.get_entailment_pairs()
+        self._relatedness_pairs = self.get_relatedness_pairs()
+
+    @property
+    def entailment_pairs(self):
+        return self._entailment_pairs
+
+    @entailment_pairs.setter
+    def entailment_pairs(self):
+        raise Exception('SICK entailment data is cannot be modified')
+
+    @property
+    def relatedness_pairs(self):
+        return self._relatedness_pairs
+
+    @relatedness_pairs.setter
+    def relatedness_pairs(self):
+        raise Exception('SICK relatedness data cannot be modified')
+
+    def build_vocab(self):
+        '''Extract and build a vocab from all text in the corpus'''
+        text = self.get_text()
+        self.vocab = sorted(list(set(nltk.word_tokenize(text))))
+
+    def get_entailment_pairs(self):
+        '''Return a list of sentence pairs with entailment labels'''
+        pairs = []
+        for item in self.data:
+            s1 = item['sentence_A']
+            s2 = item['sentence_B']
+            label = item['entailment_judgment']
+            pairs.append(TrainingPair(s1, s2, label))
+
+        return pairs
+
+    def get_relatedness_pairs(self):
+        '''Return a list of sentence pairs with relatedness scores'''
+        pairs = []
+        for item in self.data:
+            s1 = item['sentence_A']
+            s2 = item['sentence_B']
+            score = item['relatedness_score']
+            pairs.append(RelationPair(s1, s2, score))
+
+        return pairs
+
+    def get_text(self):
+        '''Returns a string containing all sentences in the SICK dataset'''
+        acc = []
+        for item in self.data:
+            pair = item['sentence_A'] + ' ' + item['sentence_B']
+            acc.append(pair.lower())
+
+        return ' '.join(acc)

@@ -7,11 +7,12 @@ import itertools
 
 import numpy as np
 
-from pysem.corpora import Wikipedia, SNLI
+from pysem.corpora import Wikipedia, SNLI, SICK
 from pysem.utils.multiprocessing import max_strip
 
 wiki_path = os.getcwd() + '/pysem/tests/corpora/wikipedia/'
 snli_path = os.getcwd() + '/pysem/tests/corpora/snli/'
+sick_path = os.getcwd() + '/pysem/tests/corpora/sick/sicktest.txt'
 
 
 def test_wiki_streaming():
@@ -61,7 +62,7 @@ def test_wiki_vocab_build(tmpdir):
 
     assert isinstance(wp.vocab, list)
     assert isinstance(random.choice(wp.vocab), str)
-    assert len(wp.vocab) > 100
+    assert len(wp.vocab) > 50
 
     vocab_path = str(tmpdir) + '/'
     wp.save_vocab(vocab_path + 'test.pickle')
@@ -71,7 +72,7 @@ def test_wiki_vocab_build(tmpdir):
 
     assert isinstance(wp.vocab, list)
     assert isinstance(random.choice(wp.vocab), str)
-    assert len(wp.vocab) > 100
+    assert len(wp.vocab) > 50
 
 
 def test_wiki_stream_reset():
@@ -158,3 +159,31 @@ def test_snli_binarizer():
     assert array[1, 1] == 1
     assert array[1, 0] == 0
     assert array[2, 2] == 1
+
+
+def test_sick_streaming():
+    sick = SICK(sick_path)
+
+    assert isinstance(sick.entailment_pairs, list)
+    assert isinstance(sick.relatedness_pairs, list)
+    assert isinstance(sick.data, list)
+
+    entailment_sample = random.choice(sick.entailment_pairs)
+    relatedness_sample = random.choice(sick.relatedness_pairs)
+
+    assert isinstance(entailment_sample.sentence1, str)
+    assert isinstance(entailment_sample.sentence2, str)
+    assert isinstance(entailment_sample.label, str)
+
+    assert isinstance(relatedness_sample.sentence1, str)
+    assert isinstance(relatedness_sample.sentence2, str)
+    assert isinstance(relatedness_sample.score, str)
+
+
+def test_sick_vocab_build():
+    sick = SICK(sick_path)
+    sick.build_vocab()
+
+    assert isinstance(sick.vocab, list)
+    assert isinstance(random.choice(sick.vocab), str)
+    assert len(sick.vocab) > 100
