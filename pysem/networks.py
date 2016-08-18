@@ -292,8 +292,8 @@ class DependencyNetwork(RecursiveModel):
         self.dim = dim
         self.vocab = sorted(list(vocab))
         self.biases = defaultdict(flat_zeros(self.dim))
-        self.bgrads = defaultdict(flat_zeros(self.dim))
         self.weights = defaultdict(square_zeros(self.dim))
+        self.bgrads = defaultdict(flat_zeros(self.dim))
         self.wgrads = defaultdict(square_zeros(self.dim))
         self.pretrained_vecs(pretrained) if pretrained else self.random_vecs()
 
@@ -301,7 +301,7 @@ class DependencyNetwork(RecursiveModel):
             self.weights[dep] = self.gaussian_id(self.dim)
             self.biases[dep] = np.zeros((self.dim, 1))
 
-        self.wmatrix = self.gaussian_id(self.dim)
+        self.wm = self.gaussian_id(self.dim)
 
     def reset_comp_graph(self):
         '''Flag all nodes in the graph as being uncomputed.'''
@@ -334,11 +334,9 @@ class DependencyNetwork(RecursiveModel):
                 self.bgrads[node.dep_] += parent.gradient
                 node.gradient = cgrad * nlgrad
                 node.computed = True
+                node.dw = np.dot(self.wm.T, node.gradient)
 
-                emb = self.vectors[node.lower_]
-                self.d_wmatrix += np.dot(node.gradient, emb.T)
-
-                node.e_grad = np.dot(self.wmatrix.T, node.gradient)
+                self.dwm += np.dot(node.gradient, self.vectors[node.lower_].T)
 
         if all([node.computed for node in self.tree]):
             return
@@ -369,8 +367,7 @@ class DependencyNetwork(RecursiveModel):
         vector for the word corresponding to the leaf node is used as the
         embedding.'''
         try:
-            # emb = np.copy(self.vectors[node.lower_])
-            emb = np.dot(self.wmatrix, np.copy(self.vectors[node.lower_]))
+            emb = np.dot(self.wm, np.copy(self.vectors[node.lower_]))
         except KeyError:
             emb = np.zeros(self.dim).reshape((self.dim, 1))
 
@@ -385,7 +382,7 @@ class DependencyNetwork(RecursiveModel):
         '''Use node gradients to update the word embeddings at each node.'''
         for node in self.tree:
             try:
-                self.vectors[node.lower_] -= self.rate * node.e_grad
+                self.vectors[node.lower_] -= self.rate * node.dw
             except KeyError:
                 pass
 
@@ -396,7 +393,7 @@ class DependencyNetwork(RecursiveModel):
             self.weights[dep] -= self.rate * self.wgrads[dep] / depcount
             self.biases[dep] -= self.rate * self.bgrads[dep] / depcount
 
-        self.wmatrix -= self.rate * (self.d_wmatrix / len(self.tree))
+        self.wm -= self.rate * (self.dwm / len(self.tree))
 
     def forward_pass(self, sentence):
         '''Compute activations for every node in the computational graph
@@ -410,10 +407,9 @@ class DependencyNetwork(RecursiveModel):
         used when computing activations in accordance with the comp graph.'''
         self.wgrads = defaultdict(square_zeros(self.dim))
         self.bgrads = defaultdict(flat_zeros(self.dim))
+        self.dwm = np.zeros_like(self.wm)
         self._set_root_gradient(error_grad)
         self.rate = rate
-
-        self.d_wmatrix = np.zeros_like(self.wmatrix)
 
         self.compute_gradients()
         self.update_weights()
@@ -450,7 +446,7 @@ class DependencyNetwork(RecursiveModel):
             if node.head.idx == node.idx:
                 node.gradient = grad
                 node.computed = True
-                node.e_grad = np.dot(self.wmatrix.T, node.gradient)
+                node.dw = np.dot(self.wm.T, node.gradient)
 
 
 class HolographicNetwork(DependencyNetwork):
