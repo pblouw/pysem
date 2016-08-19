@@ -215,3 +215,38 @@ def test_bias_gradients(dnn, snli):
             analytic = dnn.bgrads[dep].flat[idx]
 
             assert np.allclose(analytic, numerical)
+
+
+def test_wm_gradients(dnn, snli):
+    dim = 50
+    n_labels = 3
+    n_gradient_checks = 25
+
+    logreg = LogisticRegression(n_features=dim, n_labels=n_labels)
+
+    sample = next(snli.train_data)
+    xs = random.choice(sample)
+    ys = np.zeros(n_labels)
+    ys[np.random.randint(0, n_labels, 1)] = 1
+    ys = ys.reshape(n_labels, 1)
+
+    dnn.forward_pass(xs)
+
+    for _ in range(n_gradient_checks):
+        print(_)
+        idx = np.random.randint(0, dnn.wm.size, size=1)
+        params = dnn.wm.flat
+
+        numerical = num_grad(dnn, params, idx, xs, ys, logreg)
+
+        dnn.forward_pass(xs)
+
+        logreg.train(dnn.get_root_embedding(), ys, rate=0.001)
+        embedding = dnn.get_root_embedding()
+
+        error_grad = logreg.yi_grad * dnn.tanh_grad(embedding)
+
+        dnn.backward_pass(error_grad, rate=0.001)
+        analytic = dnn.dwm.flat[idx]
+
+        assert np.allclose(analytic, numerical)

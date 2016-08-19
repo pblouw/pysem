@@ -334,9 +334,7 @@ class DependencyNetwork(RecursiveModel):
                 self.bgrads[node.dep_] += parent.gradient
                 node.gradient = cgrad * nlgrad
                 node.computed = True
-                node.dw = np.dot(self.wm.T, node.gradient)
-
-                self.dwm += np.dot(node.gradient, self.vectors[node.lower_].T)
+                self._update_word_grad(node)
 
         if all([node.computed for node in self.tree]):
             return
@@ -440,13 +438,20 @@ class DependencyNetwork(RecursiveModel):
             if node.head.idx == node.idx:
                 return node.embedding
 
+    def _update_word_grad(self, node):
+        node.dw = np.dot(self.wm.T, node.gradient)
+        try:
+            self.dwm += np.dot(node.gradient, self.vectors[node.lower_].T)
+        except KeyError:
+            pass
+
     def _set_root_gradient(self, grad):
         '''Set the error gradient on the root node in the comp graph.'''
         for node in self.tree:
             if node.head.idx == node.idx:
                 node.gradient = grad
                 node.computed = True
-                node.dw = np.dot(self.wm.T, node.gradient)
+                self._update_word_grad(node)
 
 
 class HolographicNetwork(DependencyNetwork):
