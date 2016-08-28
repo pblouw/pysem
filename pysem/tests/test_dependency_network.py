@@ -233,7 +233,6 @@ def test_wm_gradients(dnn, snli):
     dnn.forward_pass(xs)
 
     for _ in range(n_gradient_checks):
-        print(_)
         idx = np.random.randint(0, dnn.wm.size, size=1)
         params = dnn.wm.flat
 
