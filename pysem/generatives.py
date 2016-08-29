@@ -6,9 +6,39 @@ from pysem.networks import DependencyNetwork, square_zeros
 
 
 class EmbeddingGenerator(DependencyNetwork):
-    """
-    A model that generates predictions for the words occupying each node in
-    the dependency tree corresponding to a supplied sentence.
+    """A model that generates predictions for the words occupying each node in
+    the dependency tree corresponding to a supplied sentence. The model takes
+    a distributed representation that conditions the generation process as
+    input, along with the sentence being predicted. The supplied sentence is
+    used to generate a dependency tree that defines computational graph that
+    is used to implement the generation process. Computing the states at each
+    node in this graph then produces a word prediction at each node.
+
+    Parameters:
+    -----------
+    dim : int
+        The dimensionality of the hidden state representations.
+    subvocabs : dict
+        A dictionary that maps each dependency to a collection of words.
+
+    Attributes:
+    -----------
+    dim : int
+        The dimensionality of the hidden state representation.
+    subvocabs : dict
+        A dictionary that maps each dependency to a collection of words.
+    parser : callable
+        The parser used to produce a dependency tree from a provided sentence.
+    weights : defaultdict
+        Matches each known dependency with a corresponding weight matrix.
+    word_weights : dict
+        Matches each known dependency with a corresponding weight matrix for
+        predicting the word occupying the dependency in question.
+    wgrads : defaultdict
+        Matches each known dependency with the corresponding weight gradient.
+    tree : list
+        A list of the nodes that make up the dependency tree for predicted
+        sentence. Computed when forward_pass is called.
     """
     def __init__(self, dim, subvocabs):
         self.dim = dim
