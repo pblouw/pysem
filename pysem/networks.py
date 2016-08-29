@@ -43,6 +43,10 @@ class RecursiveModel(object):
             'csubj', 'predet', 'csubjpass', '']
 
     @staticmethod
+    def sigmoid(x):
+        return 1.0 / (1 + np.exp(-x))
+
+    @staticmethod
     def softmax(x):
         '''Compute a softmax on the input vector.'''
         return np.exp(x) / np.sum(np.exp(x), axis=0)
