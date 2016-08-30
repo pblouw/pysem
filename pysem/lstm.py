@@ -16,22 +16,22 @@ class TreeLSTM(RecursiveModel):
         # initialize input gate weights
         self.iW = self.random_weights(dim)
         self.iU = self.random_weights(dim)
-        self.i_bias = np.zeros(self.dim).reshape((self.dim, 1))
+        self.i_bias = 5 * np.ones(self.dim).reshape((self.dim, 1))
 
         # initialize forget gate weights
         self.fW = self.random_weights(dim)
         self.fU = self.random_weights(dim)
-        self.f_bias = np.zeros(self.dim).reshape((self.dim, 1))
+        self.f_bias = 5 * np.ones(self.dim).reshape((self.dim, 1))
 
         # initialize output gate weights
         self.oW = self.random_weights(dim)
         self.oU = self.random_weights(dim)
-        self.o_bias = np.zeros(self.dim).reshape((self.dim, 1))
+        self.o_bias = 5 * np.ones(self.dim).reshape((self.dim, 1))
 
         # initialize cell input weights
-        self.uW = self.gaussian_id(dim)
-        self.uU = self.gaussian_id(dim)
-        self.u_bias = np.zeros(self.dim).reshape((self.dim, 1))
+        self.uW = self.random_weights(dim)
+        self.uU = self.random_weights(dim)
+        self.u_bias = 5 * np.ones(self.dim).reshape((self.dim, 1))
 
         self.pretrained_vecs(pretrained) if pretrained else self.random_vecs()
 
@@ -40,11 +40,13 @@ class TreeLSTM(RecursiveModel):
         for node in self.tree:
             node.computed = False
 
-    def clip_gradient(self, node, clipval=5):
+    def clip_gradient(self, gradient, clipval=5):
         '''Clip a large gradient so that its norm is equal to clipval.'''
-        norm = np.linalg.norm(node.gradient)
+        norm = np.linalg.norm(gradient)
         if norm > clipval:
-            node.gradient = (node.gradient / norm) * clipval
+            return (gradient / norm) * clipval
+        else:
+            return gradient
 
     def compute_embeddings(self):
         '''Computes embeddings for all nodes in the graph by recursively
@@ -71,6 +73,7 @@ class TreeLSTM(RecursiveModel):
             parent = self.get_parent(node)
 
             if not node.computed and parent.computed:
+                node.top_grad = self.clip_gradient(node.top_grad)
                 c_grad = node.o_gate * node.top_grad
                 c_grad += parent.c_grad * parent.f_gates[node.idx]
                 node.c_grad = c_grad
@@ -137,6 +140,7 @@ class TreeLSTM(RecursiveModel):
             self.dfW += np.dot(f_grad, node.inp_vec.T)
             self.dfU += np.dot(f_grad, child.embedding.T)
 
+        node.inp_grad = inp_grad
         node.computed = True
 
     def update_node(self, node, children):
@@ -173,6 +177,36 @@ class TreeLSTM(RecursiveModel):
         node.embedding = node.o_gate * np.tanh(node.cell_state)
         node.computed = True
 
+    def update_word_embeddings(self):
+        '''Use node gradients to update the word embeddings at each node.'''
+        for node in self.tree:
+            try:
+                self.vectors[node.lower_] -= self.rate * node.inp_grad
+            except KeyError:
+                pass
+
+    def update_weights(self):
+        '''Use gradients to update all of the LSTM weights'''
+        # update input gate weights
+        self.iW -= self.rate * self.diW
+        self.iU -= self.rate * self.diU
+        self.i_bias -= self.rate * self.i_bias_grad
+
+        # update forget gate weights
+        self.fW -= self.rate * self.dfW
+        self.fU -= self.rate * self.dfU
+        self.f_bias -= self.rate * self.f_bias_grad
+
+        # update output gate weights
+        self.oW -= self.rate * self.doW
+        self.oU -= self.rate * self.doU
+        self.o_bias -= self.rate * self.o_bias_grad
+
+        # update cell input weights
+        self.uW -= self.rate * self.duW
+        self.uU -= self.rate * self.duU
+        self.u_bias -= self.rate * self.u_bias_grad
+
     def forward_pass(self, sentence):
         '''Compute activations for every node in the computational graph
         generated from a dependency parse of the provided sentence.'''
@@ -201,8 +235,8 @@ class TreeLSTM(RecursiveModel):
         self._set_root_gradient(error_grad)
         self.rate = rate
         self.compute_gradients()
-        # self.update_weights()
-        # self.update_word_embeddings()
+        self.update_weights()
+        self.update_word_embeddings()
 
     def get_children(self, node):
         '''Returns all nodes that are children of the provided node.'''
