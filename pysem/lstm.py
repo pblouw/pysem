@@ -71,67 +71,73 @@ class TreeLSTM(RecursiveModel):
             parent = self.get_parent(node)
 
             if not node.computed and parent.computed:
-                self.clip_gradient(parent)
-
-                c_grad = node.o_gate * parent.gradient
-                c_grad += parent.c_grad * parent.f_grad
+                c_grad = node.o_gate * node.top_grad
+                c_grad += parent.c_grad * parent.f_gates[node.idx]
                 node.c_grad = c_grad
 
-                # gradients for output gate
-                o_grad = node.cell_state * parent.gradient
-                node.o_grad = o_grad * self.sigmoid_grad(node.o_gate)
-
-                self.doW += np.dot(node.o_grad, node.inp_vec.T)
-                self.doU += np.dot(node.o_grad, node.h_tilda.T)
-
-                # gradients for input gate
-                i_grad = c_grad * node.cell_input
-                node.i_grad = i_grad * self.sigmoid_grad(node.i_gate)
-
-                self.diW += np.dot(node.i_grad, node.inp_vec.T)
-                self.diU += np.dot(node.i_grad, node.h_tilda.T)
-
-                # gradients for forget gate
-                csum = sum([n.cell_state for n in self.get_children(node)])
-                f_grad = csum * c_grad
-                node.f_grad = f_grad * self.sigmoid_grad(node.f_gate)
-
-                self.dfW += np.dot(node.f_grad, node.inp_vec.T)
-                self.dfU += np.dot(node.f_grad, node.h_tilda.T)
-
-                # gradients for cell input
-                ci_grad = node.i_gate * c_grad
-                node.ci_grad = ci_grad * self.tanh_grad(node.cell_input)
-
-                self.duW += np.dot(node.ci_grad, node.inp_vec.T)
-                self.duU += np.dot(node.ci_grad, node.h_tilda.T)
-
-                # gradients for biases
-                self.i_bias_grad += node.i_grad
-                self.f_bias_grad += node.f_grad
-                self.o_bias_grad += node.o_grad
-                self.u_bias_grad += node.ci_grad
-
-                inp_grad = np.zeros_like(c_grad)
-                emb_grad = np.zeros_like(c_grad)
-
-                inp_grad += np.dot(self.diW.T, node.i_grad)
-                inp_grad += np.dot(self.dfW.T, node.f_grad)
-                inp_grad += np.dot(self.doW.T, node.o_grad)
-                inp_grad += np.dot(self.duW.T, node.ci_grad)
-
-                emb_grad += np.dot(self.diW.T, node.i_grad)
-                emb_grad += np.dot(self.dfW.T, node.f_grad)
-                emb_grad += np.dot(self.doW.T, node.o_grad)
-                emb_grad += np.dot(self.duW.T, node.ci_grad)
-
-                node.gradient = emb_grad
-                node.computed = True
+                self.grad_update(node, parent)
 
         if all([node.computed for node in self.tree]):
             return
         else:
             self.compute_gradients()
+
+    def grad_update(self, node, parent):
+
+        inp_grad = np.zeros_like(node.c_grad)
+        emb_grad = np.zeros_like(node.c_grad)
+
+        # gradients for output gate
+        o_grad = node.cell_state * node.top_grad
+        node.o_grad = o_grad * self.sigmoid_grad(node.o_gate)
+
+        self.doW += np.dot(node.o_grad, node.inp_vec.T)
+        self.doU += np.dot(node.o_grad, node.h_tilda.T)
+
+        # gradients for input gate
+        i_grad = node.c_grad * node.cell_input
+        node.i_grad = i_grad * self.sigmoid_grad(node.i_gate)
+
+        self.diW += np.dot(node.i_grad, node.inp_vec.T)
+        self.diU += np.dot(node.i_grad, node.h_tilda.T)
+
+        # gradients for cell input
+        ci_grad = node.i_gate * node.c_grad
+        node.ci_grad = ci_grad * self.tanh_grad(node.cell_input)
+
+        self.duW += np.dot(node.ci_grad, node.inp_vec.T)
+        self.duU += np.dot(node.ci_grad, node.h_tilda.T)
+
+        # gradients for biases
+        self.i_bias_grad += node.i_grad
+        self.o_bias_grad += node.o_grad
+        self.u_bias_grad += node.ci_grad
+
+        # gradients for input vecs and to pass to children
+        inp_grad += np.dot(self.diW.T, node.i_grad)
+        inp_grad += np.dot(self.doW.T, node.o_grad)
+        inp_grad += np.dot(self.duW.T, node.ci_grad)
+
+        emb_grad += np.dot(self.diU.T, node.i_grad)
+        emb_grad += np.dot(self.doU.T, node.o_grad)
+        emb_grad += np.dot(self.duU.T, node.ci_grad)
+
+        # gradients for forget gates
+        node.f_grads = {}
+        for child in self.get_children(node):
+            f_grad = node.c_grad * child.cell_state
+            f_grad = f_grad * self.sigmoid_grad(node.f_gates[child.idx])
+            node.f_grads[child.idx] = f_grad
+            self.f_bias_grad += f_grad
+
+            inp_grad += np.dot(self.dfW.T, f_grad)
+            child.top_grad = emb_grad
+            child.top_grad += np.dot(self.dfU.T, f_grad)
+
+            self.dfW += np.dot(f_grad, node.inp_vec.T)
+            self.dfU += np.dot(f_grad, child.embedding.T)
+
+        node.computed = True
 
     def update_node(self, node, children):
         '''Compute the state of the LSTM cell corresponding to the supplied
@@ -157,10 +163,11 @@ class TreeLSTM(RecursiveModel):
 
         node.cell_state = i_gate * node.cell_input
 
+        node.f_gates = {}
         for child in children:
             emb_vec = child.embedding
             f_gate = np.dot(self.fW, node.inp_vec) + np.dot(self.fU, emb_vec)
-            child.f_gate = self.sigmoid(f_gate + self.f_bias)
+            node.f_gates[child.idx] = self.sigmoid(f_gate + self.f_bias)
             node.cell_state += f_gate * child.cell_state
 
         node.embedding = node.o_gate * np.tanh(node.cell_state)
@@ -176,9 +183,6 @@ class TreeLSTM(RecursiveModel):
     def backward_pass(self, error_grad, rate=0.35):
         '''Compute gradients for every weight matrix and input word vector
         used when computing activations in accordance with the comp graph.'''
-        self._set_root_gradient(error_grad)
-        self.rate = rate
-
         self.diW = np.zeros_like(self.iW)
         self.doW = np.zeros_like(self.oW)
         self.dfW = np.zeros_like(self.fW)
@@ -194,6 +198,8 @@ class TreeLSTM(RecursiveModel):
         self.o_bias_grad = np.zeros_like(self.o_bias)
         self.u_bias_grad = np.zeros_like(self.u_bias)
 
+        self._set_root_gradient(error_grad)
+        self.rate = rate
         self.compute_gradients()
         # self.update_weights()
         # self.update_word_embeddings()
@@ -227,7 +233,7 @@ class TreeLSTM(RecursiveModel):
         '''Set the error gradient on the root node in the comp graph.'''
         for node in self.tree:
             if node.head.idx == node.idx:
-                node.gradient = grad
-                node.c_grad = np.zeros_like(grad)
-                node.f_grad = np.zeros_like(grad)
-                node.computed = True
+                node.top_grad = grad
+                c_grad = node.o_gate * node.top_grad
+                node.c_grad = c_grad
+                self.grad_update(node, node)

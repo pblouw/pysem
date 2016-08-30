@@ -29,4 +29,4 @@ def test_backward_pass(treeLSTM, snli):
     treeLSTM.backward_pass(error_grad)
 
     for node in treeLSTM.tree:
-        assert isinstance(node.gradient, np.ndarray)
+        assert isinstance(node.top_grad, np.ndarray)
