@@ -1,6 +1,83 @@
+import nltk
 import numpy as np
+
 from pysem.utils.spacy import TokenWrapper
 from pysem.networks import RecursiveModel
+
+
+class LSTM(RecursiveModel):
+    """A recurrent network that uses LSTM cells in place of the usual hidden
+    state representations.
+    """
+    def __init__(self, dim, vocab, pretrained=False):
+        self.dim = dim
+        self.vocab = sorted(vocab)
+
+        # initialize input gate weights
+        self.iW = self.random_weights(dim)
+        self.iU = self.random_weights(dim)
+        self.i_bias = 5 * np.ones(self.dim).reshape((self.dim, 1))
+
+        # initialize forget gate weights
+        self.fW = self.random_weights(dim)
+        self.fU = self.random_weights(dim)
+        self.f_bias = 5 * np.ones(self.dim).reshape((self.dim, 1))
+
+        # initialize output gate weights
+        self.oW = self.random_weights(dim)
+        self.oU = self.random_weights(dim)
+        self.o_bias = 5 * np.ones(self.dim).reshape((self.dim, 1))
+
+        # initialize cell input weights
+        self.uW = self.random_weights(dim)
+        self.uU = self.random_weights(dim)
+        self.u_bias = 5 * np.ones(self.dim).reshape((self.dim, 1))
+
+        self.pretrained_vecs(pretrained) if pretrained else self.random_vecs()
+
+    def compute_embeddings(self):
+        '''Compute LSTM cell states for each item in the sequence.'''
+        self.hs[-1] = np.zeros(self.dim).reshape((self.dim, 1))
+        self.cell_states[-1] = np.zeros(self.dim).reshape((self.dim, 1))
+
+        for i in range(len(self.sen)):
+            vec = self.to_vector(self.sen[i])
+            i_gate = np.dot(self.iW, vec) + np.dot(self.iU, self.hs[i-1])
+            o_gate = np.dot(self.oW, vec) + np.dot(self.oU, self.hs[i-1])
+            f_gate = np.dot(self.fW, vec) + np.dot(self.fU, self.hs[i-1])
+            cell_input = np.dot(self.uW, vec) + np.dot(self.uU, self.hs[i-1])
+
+            self.i_gates[i] = self.sigmoid(i_gate + self.i_bias)
+            self.o_gates[i] = self.sigmoid(o_gate + self.o_bias)
+            self.f_gates[i] = self.sigmoid(f_gate + self.f_bias)
+            self.cell_inputs[i] = np.tanh(cell_input + self.u_bias)
+
+            self.cell_states[i] = self.i_gates[i] * self.cell_inputs[i]
+            self.cell_states[i] += self.f_gates[i] * self.cell_states[i-1]
+            self.hs[i] = self.o_gates[i] * np.tanh(self.cell_states[i])
+
+    def forward_pass(self, sen):
+        '''Convert input sentence into sequence and compute cell states.'''
+        self.sen = nltk.word_tokenize(sen)
+        self.i_gates = {}
+        self.f_gates = {}
+        self.o_gates = {}
+        self.cell_inputs = {}
+        self.cell_states = {}
+        self.hs = {}
+        self.compute_embeddings()
+
+    def to_vector(self, word):
+        '''Get input vector for the word in a given sequence position.'''
+        try:
+            vector = np.copy(self.vectors[word.lower()])
+        except KeyError:
+            vector = np.zeros(self.dim).reshape((self.dim, 1))
+        return vector
+
+    def get_root_embedding(self):
+        '''Returns the embeddings for the final/root node in the sequence.'''
+        return self.hs[len(self.sen)-1]
 
 
 class TreeLSTM(RecursiveModel):

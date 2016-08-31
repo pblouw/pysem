@@ -5,7 +5,7 @@ from pysem.corpora import SNLI
 from pysem.networks import RecurrentNetwork, DependencyNetwork
 from pysem.networks import HolographicNetwork
 from pysem.generatives import EmbeddingGenerator, TreeGenerator
-from pysem.lstm import TreeLSTM
+from pysem.lstm import LSTM, TreeLSTM
 
 snli_path = os.getcwd() + '/pysem/tests/corpora/snli/'
 
@@ -37,6 +37,13 @@ def hnn(snli):
     dim = 50
     hnn = HolographicNetwork(dim=dim, vocab=snli.vocab)
     return hnn
+
+
+@pytest.fixture(scope='module')
+def lstm(snli):
+    dim = 50
+    lstm = LSTM(dim=dim, vocab=snli.vocab)
+    return lstm
 
 
 @pytest.fixture(scope='module')
