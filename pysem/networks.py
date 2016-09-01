@@ -390,7 +390,8 @@ class DependencyNetwork(RecursiveModel):
         '''Use node gradients to update the word embeddings at each node.'''
         for node in self.tree:
             try:
-                self.vectors[node.lower_] -= self.rate * node.dw
+                count = sum([1 for x in self.tree if x.lower_ == node.lower_])
+                self.vectors[node.lower_] -= self.rate * node.dw / count
             except KeyError:
                 pass
 
