@@ -44,14 +44,14 @@ def test_forward_pass(lstm, snli):
         assert isinstance(lstm.hs[i], np.ndarray)
 
 
-def test_gate_gradients(lstm, snli):
+def test_gate_weight_gradients(lstm, snli):
     dim = 50
     n_labels = 3
     n_gradient_checks = 25
 
     logreg = LogisticRegression(n_features=dim, n_labels=n_labels)
 
-    sample = next(snli.train_data)
+    sample = random.choice(snli.data)
     xs = random.choice(sample)
     ys = np.zeros(n_labels)
     ys[np.random.randint(0, n_labels, 1)] = 1
@@ -149,14 +149,14 @@ def test_gate_gradients(lstm, snli):
         assert np.allclose(analytic, numerical)
 
 
-def test_cell_input_weights(lstm, snli):
+def test_cell_input_weight_gradients(lstm, snli):
     dim = 50
     n_labels = 3
     n_gradient_checks = 25
 
     logreg = LogisticRegression(n_features=dim, n_labels=n_labels)
 
-    sample = next(snli.train_data)
+    sample = random.choice(snli.data)
     xs = random.choice(sample)
     ys = np.zeros(n_labels)
     ys[np.random.randint(0, n_labels, 1)] = 1
@@ -191,3 +191,110 @@ def test_cell_input_weights(lstm, snli):
         lstm.backward_pass(logreg.yi_grad, rate=0.001)
         analytic = lstm.duW.flat[idx]
         assert np.allclose(analytic, numerical)
+
+
+def test_bias_gradients(lstm, snli):
+    dim = 50
+    n_labels = 3
+    n_gradient_checks = 25
+
+    logreg = LogisticRegression(n_features=dim, n_labels=n_labels)
+
+    sample = random.choice(snli.data)
+    xs = random.choice(sample)
+    ys = np.zeros(n_labels)
+    ys[np.random.randint(0, n_labels, 1)] = 1
+    ys = ys.reshape(n_labels, 1)
+
+    # test bias gradient for input gate
+    for _ in range(n_gradient_checks):
+        idx = np.random.randint(0, lstm.i_bias.size, size=1)
+        params = lstm.i_bias.flat
+
+        numerical = num_grad(lstm, params, idx, xs, ys, logreg)
+
+        lstm.forward_pass(xs)
+
+        logreg.train(lstm.get_root_embedding(), ys, rate=0.001)
+
+        lstm.backward_pass(logreg.yi_grad, rate=0.001)
+        analytic = lstm.i_bias_grad.flat[idx]
+        assert np.allclose(analytic, numerical)
+
+    # test bias gradient for forget gate
+    for _ in range(n_gradient_checks):
+        idx = np.random.randint(0, lstm.f_bias.size, size=1)
+        params = lstm.f_bias.flat
+
+        numerical = num_grad(lstm, params, idx, xs, ys, logreg)
+
+        lstm.forward_pass(xs)
+
+        logreg.train(lstm.get_root_embedding(), ys, rate=0.001)
+
+        lstm.backward_pass(logreg.yi_grad, rate=0.001)
+        analytic = lstm.f_bias_grad.flat[idx]
+
+    # test bias gradient for output gate
+    for _ in range(n_gradient_checks):
+        idx = np.random.randint(0, lstm.o_bias.size, size=1)
+        params = lstm.o_bias.flat
+
+        numerical = num_grad(lstm, params, idx, xs, ys, logreg)
+
+        lstm.forward_pass(xs)
+
+        logreg.train(lstm.get_root_embedding(), ys, rate=0.001)
+
+        lstm.backward_pass(logreg.yi_grad, rate=0.001)
+        analytic = lstm.o_bias_grad.flat[idx]
+        assert np.allclose(analytic, numerical)
+
+    # test bias gradient for cell input
+    for _ in range(n_gradient_checks):
+        idx = np.random.randint(0, lstm.u_bias.size, size=1)
+        params = lstm.u_bias.flat
+
+        numerical = num_grad(lstm, params, idx, xs, ys, logreg)
+
+        lstm.forward_pass(xs)
+
+        logreg.train(lstm.get_root_embedding(), ys, rate=0.001)
+
+        lstm.backward_pass(logreg.yi_grad, rate=0.001)
+        analytic = lstm.u_bias_grad.flat[idx]
+        assert np.allclose(analytic, numerical)
+
+
+def test_input_vector_gradients(lstm, snli):
+    dim = 50
+    n_labels = 3
+    n_gradient_checks = 25
+
+    logreg = LogisticRegression(n_features=dim, n_labels=n_labels)
+
+    sample = random.choice(snli.data)
+    xs = random.choice(sample)
+    ys = np.zeros(n_labels)
+    ys[np.random.randint(0, n_labels, 1)] = 1
+    ys = ys.reshape(n_labels, 1)
+
+    lstm.forward_pass(xs)
+    words = [word for word in lstm.sen]
+
+    for _ in range(n_gradient_checks):
+        for word in words:
+            lcase = word.lower()
+            idx = np.random.randint(0, lstm.vectors[lcase].size, size=1)
+            params = lstm.vectors[lcase].flat
+
+            numerical = num_grad(lstm, params, idx, xs, ys, logreg)
+
+            lstm.forward_pass(xs)
+
+            logreg.train(lstm.get_root_embedding(), ys, rate=0.001)
+
+            lstm.backward_pass(logreg.yi_grad, rate=0.001)
+
+            analytic = lstm.dxs[lcase].flat[idx]
+            assert np.allclose(analytic, numerical)

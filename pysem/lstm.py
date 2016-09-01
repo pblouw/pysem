@@ -16,17 +16,17 @@ class LSTM(RecursiveModel):
         # initialize input gate weights
         self.iW = self.random_weights(dim)
         self.iU = self.random_weights(dim)
-        self.i_bias = 1 * np.ones(self.dim).reshape((self.dim, 1))
+        self.i_bias = 3 * np.ones(self.dim).reshape((self.dim, 1))
 
         # initialize forget gate weights
         self.fW = self.random_weights(dim)
         self.fU = self.random_weights(dim)
-        self.f_bias = 1 * np.ones(self.dim).reshape((self.dim, 1))
+        self.f_bias = 3 * np.ones(self.dim).reshape((self.dim, 1))
 
         # initialize output gate weights
         self.oW = self.random_weights(dim)
         self.oU = self.random_weights(dim)
-        self.o_bias = 1 * np.ones(self.dim).reshape((self.dim, 1))
+        self.o_bias = 3 * np.ones(self.dim).reshape((self.dim, 1))
 
         # initialize cell input weights
         self.uW = self.random_weights(dim)
@@ -93,6 +93,8 @@ class LSTM(RecursiveModel):
         self.o_bias_grad = np.zeros_like(self.o_bias)
         self.u_bias_grad = np.zeros_like(self.u_bias)
 
+        self.dxs = {w.lower(): np.zeros_like(self.i_bias) for w in self.sen}
+
         h_grad = error_grad
         s_grad = np.zeros(self.dim).reshape((self.dim, 1))
 
@@ -135,6 +137,7 @@ class LSTM(RecursiveModel):
             dx += np.dot(self.iW.T, d_i_gate)
             dx += np.dot(self.fW.T, d_f_gate)
             dx += np.dot(self.uW.T, d_cell_input)
+            self.dxs[self.sen[i].lower()] += dx
 
             dh += np.dot(self.oU.T, d_o_gate)
             dh += np.dot(self.iU.T, d_i_gate)
@@ -160,6 +163,15 @@ class LSTM(RecursiveModel):
         self.f_bias -= rate * self.f_bias_grad
         self.o_bias -= rate * self.o_bias_grad
         self.u_bias -= rate * self.u_bias_grad
+
+        # update word embeddings
+        for item in self.sen:
+            word = item.lower()
+            count = sum([1 for x in self.sen if word == x.lower()])
+            try:
+                self.vectors[word] -= rate * self.dxs[word] / count
+            except KeyError:
+                pass
 
     def to_vector(self, word):
         '''Get input vector for the word in a given sequence position.'''
