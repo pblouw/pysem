@@ -48,6 +48,11 @@ class RecursiveModel(object):
         return 1.0 / (1 + np.exp(-x))
 
     @staticmethod
+    def sigmoid_grad(x):
+        '''Compute sigmoid gradient with respect to an input vector.'''
+        return x * (1 - x)
+
+    @staticmethod
     def softmax(x):
         '''Compute a softmax on the input vector.'''
         return np.exp(x) / np.sum(np.exp(x), axis=0)
@@ -92,10 +97,6 @@ class RecursiveModel(object):
         scale = 1 / np.sqrt(dim)
         vector = np.random.normal(loc=0, scale=scale, size=(dim, 1))
         return vector
-
-    def sigmoid_grad(self, x):
-        '''Compute sigmoid gradient with respect to an input vector.'''
-        return self.sigmoid(x) * (1 - self.sigmoid(x))
 
     def pretrained_vecs(self, path):
         '''Load pretrained word embeddings for initialization.'''
