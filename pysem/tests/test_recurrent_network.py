@@ -107,7 +107,8 @@ def test_bias_gradients(rnn, snli, get_cost, num_grad, classifier):
         train_step(rnn, classifier, xs, ys)
         analytic_grad = rnn.dbh.flat[idx]
 
-        assert np.allclose(analytic_grad, numerical_grad)
+        if not rnn.clipflag:
+            assert np.allclose(analytic_grad, numerical_grad)
 
         idx = np.random.randint(0, rnn.by.size, size=1)
         params = rnn.by.flat

@@ -157,6 +157,7 @@ class RecurrentNetwork(RecursiveModel):
     def __init__(self, dim, vocab, pretrained=False):
         self.dim = dim
         self.vocab = vocab
+        self.clipflag = None
 
         self.whh = self.gaussian_id(dim)
         self.why = self.gaussian_id(dim)
@@ -171,6 +172,7 @@ class RecurrentNetwork(RecursiveModel):
         '''Clip a large gradient so that its norm is equal to clipval.'''
         norm = np.linalg.norm(gradient)
         if norm > clipval:
+            self.clipflag = True
             gradient = (gradient / norm) * 5
 
         return gradient
