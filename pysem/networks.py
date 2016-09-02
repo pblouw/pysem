@@ -7,6 +7,7 @@ import numpy as np
 from collections import defaultdict
 from pysem.utils.spacy import TokenWrapper
 from pysem.utils.vsa import normalize, unitary_vector, get_convolution_matrix
+from pysem.utils.multiprocessing import flatten
 
 
 def square_zeros(dim):
@@ -165,7 +166,6 @@ class RecurrentNetwork(RecursiveModel):
         self.by = np.zeros((dim, 1))
 
         self.pretrained_vecs(pretrained) if pretrained else self.random_vecs()
-        self.dwrd = {}
 
     def clip_gradient(self, gradient, clipval=5):
         '''Clip a large gradient so that its norm is equal to clipval.'''
@@ -214,6 +214,7 @@ class RecurrentNetwork(RecursiveModel):
         '''Compute gradients for hidden-to-hidden weight matrix and input word
         vectors before performing weight updates.'''
         error_grad = error_grad * self.tanh_grad(self.get_root_embedding())
+        self.xgrads = defaultdict(flat_zeros(self.dim))
 
         dwhh = np.zeros_like(self.whh)
         dbh = np.zeros_like(self.bh)
@@ -238,8 +239,7 @@ class RecurrentNetwork(RecursiveModel):
                 if word != 'PAD':
                     try:
                         item = word.lower()
-                        self.dwrd[item] = dh[:, idx].reshape(self.dim, 1)
-                        self.vectors[item] -= rate * self.dwrd[item]
+                        self.xgrads[item] += dh[:, idx].reshape(self.dim, 1)
                     except KeyError:
                         pass
 
@@ -247,11 +247,19 @@ class RecurrentNetwork(RecursiveModel):
         self.dwhh = self.clip_gradient(dwhh / self.bsize)
         self.dbh = self.clip_gradient(dbh / self.bsize)
         self.dby = self.clip_gradient(dby / self.bsize)
+        self.xgrads = {w: g / self.bsize for w, g in self.xgrads.items()}
 
         self.why -= rate * self.dwhy
         self.whh -= rate * self.dwhh
         self.bh -= rate * self.dbh
         self.by -= rate * self.dby
+
+        word_set = [w.lower() for w in set(flatten(self.batch)) if w != 'PAD']
+        all_words = [w.lower() for w in flatten(self.batch) if w != 'PAD']
+
+        for word in word_set:
+            count = all_words.count(word)
+            self.vectors[word] -= rate * self.xgrads[word] / count
 
     def get_root_embedding(self):
         '''Returns the embeddings for the final/root node in the sequence.'''
