@@ -1,40 +1,32 @@
-import os
 import random
 import pytest
 
 import numpy as np
 
-from pysem.utils.ml import LogisticRegression
-
-snli_path = os.getcwd() + '/pysem/tests/corpora/snli/'
-
-
-def get_cost(model, logreg, xs, ys):
-    model.forward_pass(xs)
-    embedding = model.get_root_embedding()
-
-    return logreg.get_cost(embedding, ys)
+n_gradient_checks = 25
+n_labels = 3
+rate = 0.001
 
 
-def num_grad(model, params, idx, xs, ys, logreg, delta=1e-5):
-    val = np.copy(params[idx])
+def random_data(snli):
+    sample = random.choice(snli.data)
+    xs = random.choice(sample)
+    ys = np.zeros(n_labels)
+    ys[np.random.randint(0, n_labels, 1)] = 1
+    ys = ys.reshape(n_labels, 1)
 
-    params[idx] = val + delta
-    pcost = get_cost(model, logreg, xs, ys)
+    return xs, ys
 
-    params[idx] = val - delta
-    ncost = get_cost(model, logreg, xs, ys)
 
-    params[idx] = val
-    numerical_gradient = (pcost - ncost) / (2 * delta)
-
-    return numerical_gradient
+def train_step(s_model, classifier, xs, ys):
+    s_model.forward_pass(xs)
+    classifier.train(s_model.get_root_embedding(), ys, rate=rate)
+    s_model.backward_pass(classifier.yi_grad, rate=rate)
 
 
 def test_token_wrapper(dnn, snli):
-    sample = next(snli.train_data)
+    sample = random.choice(snli.data)
     sen = random.choice(sample)
-
     dnn.forward_pass(sen)
 
     node = random.choice(dnn.tree)
@@ -47,14 +39,12 @@ def test_token_wrapper(dnn, snli):
     assert node.computed is False
     assert node.gradient is None
     assert node.__str__() in dnn.vocab
-
     assert node.dep_ in dnn.deps
 
 
 def test_forward_pass(dnn, snli):
-    sample = next(snli.train_data)
+    sample = random.choice(snli.data)
     sen = random.choice(sample)
-
     dnn.forward_pass(sen)
     sen_vec = dnn.get_root_embedding()
 
@@ -65,13 +55,10 @@ def test_forward_pass(dnn, snli):
 
 
 def test_backward_pass(dnn, snli):
-    dim = 50
-    eps = 0.5
-
-    sample = next(snli.train_data)
+    sample = random.choice(snli.data)
     sen = random.choice(sample)
 
-    error_grad = np.random.random((dim, 1)) * 2 * eps - eps
+    error_grad = np.random.random((dnn.dim, 1)) * 2 * 0.5 - 0.5
 
     dnn.forward_pass(sen)
     deps = [node.dep_ for node in dnn.tree if node.dep_ != 'ROOT']
@@ -82,7 +69,7 @@ def test_backward_pass(dnn, snli):
         weights.append(np.copy(dnn.weights[dep]))
 
     # Do backprop
-    dnn.backward_pass(error_grad, rate=0.1)
+    dnn.backward_pass(error_grad, rate=rate)
 
     # Check that a gradient is computed for every node in the tree
     for node in dnn.tree:
@@ -102,19 +89,8 @@ def test_backward_pass(dnn, snli):
         assert np.count_nonzero(pair[1] - pair[0]) == pair[0].size
 
 
-def test_weight_gradients(dnn, snli):
-
-    dim = 50
-    n_labels = 3
-    n_gradient_checks = 25
-
-    logreg = LogisticRegression(n_features=dim, n_labels=n_labels)
-
-    sample = next(snli.train_data)
-    xs = random.choice(sample)
-    ys = np.zeros(n_labels)
-    ys[np.random.randint(0, n_labels, 1)] = 1
-    ys = ys.reshape(n_labels, 1)
+def test_weight_gradients(dnn, snli, get_cost, num_grad, classifier):
+    xs, ys = random_data(snli)
 
     dnn.forward_pass(xs)
     deps = [node.dep_ for node in dnn.tree if node.dep_ != 'ROOT']
@@ -125,74 +101,33 @@ def test_weight_gradients(dnn, snli):
             idx = np.random.randint(0, dnn.weights[dep].size, size=1)
             params = dnn.weights[dep].flat
 
-            numerical = num_grad(dnn, params, idx, xs, ys, logreg)
+            numerical_grad = num_grad(dnn, params, idx, xs, ys, classifier)
+            train_step(dnn, classifier, xs, ys)
+            analytic_grad = dnn.wgrads[dep].flat[idx]
 
-            dnn.forward_pass(xs)
-
-            logreg.train(dnn.get_root_embedding(), ys, rate=0.001)
-            embedding = dnn.get_root_embedding()
-
-            error_grad = logreg.yi_grad * dnn.tanh_grad(embedding)
-
-            dnn.backward_pass(error_grad, rate=0.001)
-            analytic = dnn.wgrads[dep].flat[idx]
-
-            assert np.allclose(analytic, numerical)
+            assert np.allclose(analytic_grad, numerical_grad)
 
 
-def test_embedding_gradients(dnn, snli):
-    snli.reset_streams()
-    snli.extractor = snli.get_sentences
-
-    dim = 50
-    n_labels = 3
-    n_gradient_checks = 25
-
-    logreg = LogisticRegression(n_features=dim, n_labels=n_labels)
-
-    sample = next(snli.train_data)
-    xs = random.choice(sample)
-    ys = np.zeros(n_labels)
-    ys[np.random.randint(0, n_labels, 1)] = 1
-    ys = ys.reshape(n_labels, 1)
+def test_embedding_gradients(dnn, snli, get_cost, num_grad, classifier):
+    xs, ys = random_data(snli)
 
     dnn.forward_pass(xs)
-    words = [node.orth_.lower() for node in dnn.tree]
+    words = [node.lower_ for node in dnn.tree]
 
     for _ in range(n_gradient_checks):
         for word in words:
             idx = np.random.randint(0, dnn.vectors[word].size, size=1)
             params = dnn.vectors[word].flat
 
-            numerical = num_grad(dnn, params, idx, xs, ys, logreg)
+            numerical_grad = num_grad(dnn, params, idx, xs, ys, classifier)
+            train_step(dnn, classifier, xs, ys)
+            analytic_grad = dnn.xgrads[word].flat[idx]
 
-            dnn.forward_pass(xs)
-
-            logreg.train(dnn.get_root_embedding(), ys, rate=0.001)
-            embedding = dnn.get_root_embedding()
-
-            error_grad = logreg.yi_grad * dnn.tanh_grad(embedding)
-
-            dnn.backward_pass(error_grad, rate=0.001)
-            node = [node for node in dnn.tree if node.lower_ == word].pop()
-
-            analytic = node.dw.flat[idx]
-
-            assert np.allclose(analytic, numerical)
+            assert np.allclose(analytic_grad, numerical_grad)
 
 
-def test_bias_gradients(dnn, snli):
-    dim = 50
-    n_labels = 3
-    n_gradient_checks = 25
-
-    logreg = LogisticRegression(n_features=dim, n_labels=n_labels)
-
-    sample = next(snli.train_data)
-    xs = random.choice(sample)
-    ys = np.zeros(n_labels)
-    ys[np.random.randint(0, n_labels, 1)] = 1
-    ys = ys.reshape(n_labels, 1)
+def test_bias_gradients(dnn, snli, get_cost, num_grad, classifier):
+    xs, ys = random_data(snli)
 
     dnn.forward_pass(xs)
     deps = [node.dep_ for node in dnn.tree if node.dep_ != 'ROOT']
@@ -202,50 +137,22 @@ def test_bias_gradients(dnn, snli):
             idx = np.random.randint(0, dnn.biases[dep].size, size=1)
             params = dnn.biases[dep].flat
 
-            numerical = num_grad(dnn, params, idx, xs, ys, logreg)
+            numerical_grad = num_grad(dnn, params, idx, xs, ys, classifier)
+            train_step(dnn, classifier, xs, ys)
+            analytic_grad = dnn.bgrads[dep].flat[idx]
 
-            dnn.forward_pass(xs)
-
-            logreg.train(dnn.get_root_embedding(), ys, rate=0.001)
-            embedding = dnn.get_root_embedding()
-
-            error_grad = logreg.yi_grad * dnn.tanh_grad(embedding)
-
-            dnn.backward_pass(error_grad, rate=0.001)
-            analytic = dnn.bgrads[dep].flat[idx]
-
-            assert np.allclose(analytic, numerical)
+            assert np.allclose(analytic_grad, numerical_grad)
 
 
-def test_wm_gradients(dnn, snli):
-    dim = 50
-    n_labels = 3
-    n_gradient_checks = 25
-
-    logreg = LogisticRegression(n_features=dim, n_labels=n_labels)
-
-    sample = next(snli.train_data)
-    xs = random.choice(sample)
-    ys = np.zeros(n_labels)
-    ys[np.random.randint(0, n_labels, 1)] = 1
-    ys = ys.reshape(n_labels, 1)
-
-    dnn.forward_pass(xs)
+def test_wm_gradients(dnn, snli, get_cost, num_grad, classifier):
+    xs, ys = random_data(snli)
 
     for _ in range(n_gradient_checks):
         idx = np.random.randint(0, dnn.wm.size, size=1)
         params = dnn.wm.flat
 
-        numerical = num_grad(dnn, params, idx, xs, ys, logreg)
+        numerical_grad = num_grad(dnn, params, idx, xs, ys, classifier)
+        train_step(dnn, classifier, xs, ys)
+        analytic_grad = dnn.dwm.flat[idx]
 
-        dnn.forward_pass(xs)
-
-        logreg.train(dnn.get_root_embedding(), ys, rate=0.001)
-        embedding = dnn.get_root_embedding()
-
-        error_grad = logreg.yi_grad * dnn.tanh_grad(embedding)
-
-        dnn.backward_pass(error_grad, rate=0.001)
-        analytic = dnn.dwm.flat[idx]
-
-        assert np.allclose(analytic, numerical)
+        assert np.allclose(analytic_grad, numerical_grad)

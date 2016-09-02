@@ -273,8 +273,6 @@ class DependencyNetwork(RecursiveModel):
         The dimensionality of the hidden state representation.
     vocab : list of strings
         The vocabulary of possible input items.
-    eps : float, optional
-        The scaling factor on random weight initialization.
 
     Attributes:
     -----------
@@ -303,8 +301,6 @@ class DependencyNetwork(RecursiveModel):
         self.vocab = sorted(list(vocab))
         self.biases = defaultdict(flat_zeros(self.dim))
         self.weights = defaultdict(square_zeros(self.dim))
-        self.bgrads = defaultdict(flat_zeros(self.dim))
-        self.wgrads = defaultdict(square_zeros(self.dim))
         self.pretrained_vecs(pretrained) if pretrained else self.random_vecs()
 
         for dep in self.deps:
@@ -390,8 +386,9 @@ class DependencyNetwork(RecursiveModel):
         '''Use node gradients to update the word embeddings at each node.'''
         for node in self.tree:
             try:
-                count = sum([1 for x in self.tree if x.lower_ == node.lower_])
-                self.vectors[node.lower_] -= self.rate * node.dw / count
+                word = node.lower_
+                count = sum([1 for x in self.tree if x.lower_ == word])
+                self.vectors[word] -= self.rate * self.xgrads[word] / count
             except KeyError:
                 pass
 
@@ -416,6 +413,7 @@ class DependencyNetwork(RecursiveModel):
         used when computing activations in accordance with the comp graph.'''
         self.wgrads = defaultdict(square_zeros(self.dim))
         self.bgrads = defaultdict(flat_zeros(self.dim))
+        self.xgrads = defaultdict(flat_zeros(self.dim))
         self.dwm = np.zeros_like(self.wm)
         self._set_root_gradient(error_grad)
         self.rate = rate
@@ -450,7 +448,7 @@ class DependencyNetwork(RecursiveModel):
                 return node.embedding
 
     def _update_word_grad(self, node):
-        node.dw = np.dot(self.wm.T, node.gradient)
+        self.xgrads[node.lower_] += np.dot(self.wm.T, node.gradient)
         try:
             self.dwm += np.dot(node.gradient, self.vectors[node.lower_].T)
         except KeyError:
@@ -460,7 +458,8 @@ class DependencyNetwork(RecursiveModel):
         '''Set the error gradient on the root node in the comp graph.'''
         for node in self.tree:
             if node.head.idx == node.idx:
-                node.gradient = grad
+                embedding = self.get_root_embedding()
+                node.gradient = grad * self.tanh_grad(embedding)
                 node.computed = True
                 self._update_word_grad(node)
 
