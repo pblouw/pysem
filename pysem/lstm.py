@@ -1,8 +1,11 @@
 import nltk
 import numpy as np
 
+from collections import defaultdict
+
 from pysem.utils.spacy import TokenWrapper
-from pysem.networks import RecursiveModel
+from pysem.utils.multiprocessing import flatten
+from pysem.networks import RecursiveModel, flat_zeros
 
 
 class LSTM(RecursiveModel):
@@ -16,17 +19,17 @@ class LSTM(RecursiveModel):
         # initialize input gate weights
         self.iW = self.random_weights(dim)
         self.iU = self.random_weights(dim)
-        self.i_bias = 3 * np.ones(self.dim).reshape((self.dim, 1))
+        self.i_bias = 5 * np.ones(self.dim).reshape((self.dim, 1))
 
         # initialize forget gate weights
         self.fW = self.random_weights(dim)
         self.fU = self.random_weights(dim)
-        self.f_bias = 3 * np.ones(self.dim).reshape((self.dim, 1))
+        self.f_bias = 5 * np.ones(self.dim).reshape((self.dim, 1))
 
         # initialize output gate weights
         self.oW = self.random_weights(dim)
         self.oU = self.random_weights(dim)
-        self.o_bias = 3 * np.ones(self.dim).reshape((self.dim, 1))
+        self.o_bias = 5 * np.ones(self.dim).reshape((self.dim, 1))
 
         # initialize cell input weights
         self.uW = self.random_weights(dim)
@@ -44,15 +47,16 @@ class LSTM(RecursiveModel):
 
     def compute_embeddings(self):
         '''Compute LSTM cell states for each item in the sequence.'''
-        self.hs[-1] = np.zeros(self.dim).reshape((self.dim, 1))
-        self.cell_states[-1] = np.zeros(self.dim).reshape((self.dim, 1))
+        self.hs[-1] = np.zeros((self.dim, self.bsize))
+        self.cell_states[-1] = np.zeros((self.dim, self.bsize))
 
-        for i in range(len(self.sen)):
-            vec = self.to_vector(self.sen[i])
-            i_gate = np.dot(self.iW, vec) + np.dot(self.iU, self.hs[i-1])
-            o_gate = np.dot(self.oW, vec) + np.dot(self.oU, self.hs[i-1])
-            f_gate = np.dot(self.fW, vec) + np.dot(self.fU, self.hs[i-1])
-            cell_input = np.dot(self.uW, vec) + np.dot(self.uU, self.hs[i-1])
+        for i in range(self.seqlen):
+            words = [sequence[i] for sequence in self.batch]
+            xs = self.to_array(words)
+            i_gate = np.dot(self.iW, xs) + np.dot(self.iU, self.hs[i-1])
+            o_gate = np.dot(self.oW, xs) + np.dot(self.oU, self.hs[i-1])
+            f_gate = np.dot(self.fW, xs) + np.dot(self.fU, self.hs[i-1])
+            cell_input = np.dot(self.uW, xs) + np.dot(self.uU, self.hs[i-1])
 
             self.i_gates[i] = self.sigmoid(i_gate + self.i_bias)
             self.o_gates[i] = self.sigmoid(o_gate + self.o_bias)
@@ -62,11 +66,19 @@ class LSTM(RecursiveModel):
             self.cell_states[i] = self.i_gates[i] * self.cell_inputs[i]
             self.cell_states[i] += self.f_gates[i] * self.cell_states[i-1]
             self.hs[i] = self.o_gates[i] * self.cell_states[i]
-            self.xs[i] = vec
+            self.xs[i] = xs
+            self.ws[i] = words
 
-    def forward_pass(self, sen):
+    def forward_pass(self, batch):
         '''Convert input sentence into sequence and compute cell states.'''
-        self.sen = nltk.word_tokenize(sen)
+        self.batch = [nltk.word_tokenize(sen) for sen in batch]
+        self.bsize = len(batch)
+        self.seqlen = max([len(s) for s in self.batch])
+
+        for x in range(self.bsize):
+            diff = self.seqlen - len(self.batch[x])
+            self.batch[x] = ['PAD' for _ in range(diff)] + self.batch[x]
+
         self.i_gates = {}
         self.f_gates = {}
         self.o_gates = {}
@@ -74,6 +86,7 @@ class LSTM(RecursiveModel):
         self.cell_states = {}
         self.hs = {}
         self.xs = {}
+        self.ws = {}
         self.compute_embeddings()
 
     def backward_pass(self, error_grad, rate=0.1):
@@ -93,13 +106,13 @@ class LSTM(RecursiveModel):
         self.o_bias_grad = np.zeros_like(self.o_bias)
         self.u_bias_grad = np.zeros_like(self.u_bias)
 
-        self.dxs = {w.lower(): np.zeros_like(self.i_bias) for w in self.sen}
+        self.xgrads = defaultdict(flat_zeros(self.dim))
 
         h_grad = error_grad
-        s_grad = np.zeros(self.dim).reshape((self.dim, 1))
+        s_grad = np.zeros_like(error_grad)
 
         # compute all gradients in reverse through the sequence
-        for i in reversed(range(len(self.sen))):
+        for i in reversed(range(self.seqlen)):
             d_cell_state = h_grad * self.o_gates[i] + s_grad
 
             d_o_gate = h_grad * self.cell_states[i]
@@ -124,10 +137,11 @@ class LSTM(RecursiveModel):
             self.dfU += np.dot(d_f_gate, self.hs[i-1].T)
             self.duU += np.dot(d_cell_input, self.hs[i-1].T)
 
-            self.i_bias_grad += d_i_gate
-            self.f_bias_grad += d_f_gate
-            self.o_bias_grad += d_o_gate
-            self.u_bias_grad += d_cell_input
+            dim = self.dim
+            self.i_bias_grad += np.sum(d_i_gate, axis=1).reshape(dim, 1)
+            self.f_bias_grad += np.sum(d_f_gate, axis=1).reshape(dim, 1)
+            self.o_bias_grad += np.sum(d_o_gate, axis=1).reshape(dim, 1)
+            self.u_bias_grad += np.sum(d_cell_input, axis=1).reshape(dim, 1)
 
             dx = np.zeros_like(self.xs[i])
             dh = np.zeros_like(self.hs[i-1])
@@ -137,7 +151,14 @@ class LSTM(RecursiveModel):
             dx += np.dot(self.iW.T, d_i_gate)
             dx += np.dot(self.fW.T, d_f_gate)
             dx += np.dot(self.uW.T, d_cell_input)
-            self.dxs[self.sen[i].lower()] += dx
+
+            for idx, item in enumerate(self.ws[i]):
+                if item != 'PAD':
+                    try:
+                        word = item.lower()
+                        self.xgrads[word] += dx[:, idx].reshape(self.dim, 1)
+                    except KeyError:
+                        pass
 
             dh += np.dot(self.oU.T, d_o_gate)
             dh += np.dot(self.iU.T, d_i_gate)
@@ -147,6 +168,22 @@ class LSTM(RecursiveModel):
             # update gradients for use in next iteration
             h_grad = dh
             s_grad = self.f_gates[i] * d_cell_state
+
+        # clip gradients
+        self.doW = self.doW / self.bsize
+        self.dfW = self.dfW / self.bsize
+        self.diW = self.diW / self.bsize
+        self.duW = self.duW / self.bsize
+        self.doU = self.doU / self.bsize
+        self.dfU = self.dfU / self.bsize
+        self.diU = self.diU / self.bsize
+        self.duU = self.duU / self.bsize
+        self.i_bias_grad = self.i_bias_grad / self.bsize
+        self.f_bias_grad = self.f_bias_grad / self.bsize
+        self.o_bias_grad = self.o_bias_grad / self.bsize
+        self.u_bias_grad = self.u_bias_grad / self.bsize
+
+        self.xgrads = {w: g / self.bsize for w, g in self.xgrads.items()}
 
         # perform weight updates
         self.oW -= rate * self.doW
@@ -165,25 +202,27 @@ class LSTM(RecursiveModel):
         self.u_bias -= rate * self.u_bias_grad
 
         # update word embeddings
-        for item in self.sen:
-            word = item.lower()
-            count = sum([1 for x in self.sen if word == x.lower()])
-            try:
-                self.vectors[word] -= rate * self.dxs[word] / count
-            except KeyError:
-                pass
+        word_set = [w.lower() for w in set(flatten(self.batch)) if w != 'PAD']
+        all_words = [w.lower() for w in flatten(self.batch) if w != 'PAD']
 
-    def to_vector(self, word):
-        '''Get input vector for the word in a given sequence position.'''
-        try:
-            vector = np.copy(self.vectors[word.lower()])
-        except KeyError:
-            vector = np.zeros(self.dim).reshape((self.dim, 1))
-        return vector
+        for word in word_set:
+            count = all_words.count(word)
+            self.vectors[word] -= rate * self.xgrads[word] / count
+
+    def to_array(self, words):
+        '''Build input array from words in a given sequence position.'''
+        array = np.zeros((self.dim, self.bsize))
+        for idx, word in enumerate(words):
+            if word != 'PAD':
+                try:
+                    array[:, idx] = self.vectors[word.lower()].flatten()
+                except KeyError:
+                    pass
+        return array
 
     def get_root_embedding(self):
         '''Returns the embeddings for the final/root node in the sequence.'''
-        return np.copy(self.hs[len(self.sen)-1])
+        return np.copy(self.hs[self.seqlen-1])
 
 
 class TreeLSTM(RecursiveModel):
