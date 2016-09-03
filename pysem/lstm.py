@@ -65,7 +65,7 @@ class LSTM(RecursiveModel):
 
             self.cell_states[i] = self.i_gates[i] * self.cell_inputs[i]
             self.cell_states[i] += self.f_gates[i] * self.cell_states[i-1]
-            self.hs[i] = self.o_gates[i] * self.cell_states[i]
+            self.hs[i] = self.o_gates[i] * np.tanh(self.cell_states[i])
             self.xs[i] = xs
             self.ws[i] = words
 
@@ -113,9 +113,11 @@ class LSTM(RecursiveModel):
 
         # compute all gradients in reverse through the sequence
         for i in reversed(range(self.seqlen)):
-            d_cell_state = h_grad * self.o_gates[i] + s_grad
+            d_cell_state = h_grad * self.o_gates[i]
+            d_cell_state *= self.tanh_grad(np.tanh(self.cell_states[i]))
+            d_cell_state += s_grad
 
-            d_o_gate = h_grad * self.cell_states[i]
+            d_o_gate = h_grad * np.tanh(self.cell_states[i])
             d_o_gate *= self.sigmoid_grad(self.o_gates[i])
 
             d_f_gate = d_cell_state * self.cell_states[i-1]
