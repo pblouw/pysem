@@ -260,8 +260,11 @@ class RecurrentNetwork(RecursiveModel):
         all_words = [w.lower() for w in flatten(self.batch) if w != 'PAD']
 
         for word in word_set:
-            count = all_words.count(word)
-            self.vectors[word] -= rate * self.xgrads[word] / count
+            try:
+                count = all_words.count(word)
+                self.vectors[word] -= rate * self.xgrads[word] / count
+            except KeyError:
+                pass
 
     def get_root_embedding(self):
         '''Returns the embeddings for the final/root node in the sequence.'''
@@ -544,6 +547,7 @@ class HolographicNetwork(DependencyNetwork):
         '''Compute gradients for every weight matrix and input word vector
         used when computing activations in accordance with the comp graph.'''
         self.bgrads = defaultdict(flat_zeros(self.dim))
+        self.xgrads = defaultdict(flat_zeros(self.dim))
         self._set_root_gradient(error_grad)
         self.rate = rate
 
@@ -557,22 +561,14 @@ class HolographicNetwork(DependencyNetwork):
         whose parents have been computed. Recursion terminates when every
         embedding and weight matrix has a gradient.'''
         for node in self.tree:
-            if not self.has_children(node):
-                continue
+            parent = self.get_parent(node)
 
-            if node.computed:
-                self.clip_gradient(node)
-                children = self.get_children(node)
-
-                for child in children:
-                    if child.computed:
-                        continue
-
-                    cgrad = np.dot(self.weights[child.dep_].T, node.gradient)
-
-                    self.bgrads[child.dep_] += node.gradient
-                    child.gradient = cgrad
-                    child.computed = True
+            if not node.computed and parent.computed:
+                cgrad = np.dot(self.weights[node.dep_].T, parent.gradient)
+                self.bgrads[node.dep_] += parent.gradient
+                node.gradient = cgrad
+                node.computed = True
+                self._update_word_grad(node)
 
         if all([node.computed for node in self.tree]):
             return
@@ -585,13 +581,11 @@ class HolographicNetwork(DependencyNetwork):
             depcount = len([True for node in self.tree if node.dep_ == dep])
             self.biases[dep] -= self.rate * self.bgrads[dep] / depcount
 
-    def update_word_embeddings(self):
-        '''Use node gradients to update the word embeddings at each node.'''
-        for node in self.tree:
-            try:
-                self.vectors[node.lower_] -= self.rate * node.gradient
-            except KeyError:
-                pass
+    def _update_word_grad(self, node):
+        try:
+            self.xgrads[node.lower_] += node.gradient
+        except KeyError:
+            pass
 
     def _set_root_gradient(self, grad):
         '''Set the error gradient on the root node in the comp graph.'''
@@ -599,3 +593,4 @@ class HolographicNetwork(DependencyNetwork):
             if node.head.idx == node.idx:
                 node.gradient = grad
                 node.computed = True
+                self._update_word_grad(node)

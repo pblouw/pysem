@@ -1,33 +1,25 @@
-import os
 import random
-
 import numpy as np
 
-from pysem.utils.ml import LogisticRegression
-
-snli_path = os.getcwd() + '/pysem/tests/corpora/snli/'
-
-
-def get_cost(model, logreg, xs, ys):
-    model.forward_pass(xs)
-    embedding = model.get_root_embedding()
-
-    return logreg.get_cost(embedding, ys)
+n_labels = 3
+n_gradient_checks = 25
+rate = 0.001
 
 
-def num_grad(model, params, idx, xs, ys, logreg, delta=1e-5):
-    val = np.copy(params[idx])
+def random_data(snli):
+    sample = random.choice(snli.data)
+    xs = random.choice(sample)
+    ys = np.zeros(n_labels)
+    ys[np.random.randint(0, n_labels, 1)] = 1
+    ys = ys.reshape(n_labels, 1)
 
-    params[idx] = val + delta
-    pcost = get_cost(model, logreg, xs, ys)
+    return xs, ys
 
-    params[idx] = val - delta
-    ncost = get_cost(model, logreg, xs, ys)
 
-    params[idx] = val
-    numerical_gradient = (pcost - ncost) / (2 * delta)
-
-    return numerical_gradient
+def train_step(s_model, classifier, xs, ys):
+    s_model.forward_pass(xs)
+    classifier.train(s_model.get_root_embedding(), ys, rate=rate)
+    s_model.backward_pass(classifier.yi_grad, rate=rate)
 
 
 def test_forward_pass(hnn, snli):
@@ -35,25 +27,24 @@ def test_forward_pass(hnn, snli):
     sen = random.choice(sample)
 
     hnn.forward_pass(sen)
-    sen_vec = hnn.get_root_embedding()
-
-    assert isinstance(sen_vec, np.ndarray)
+    assert isinstance(hnn.get_root_embedding(), np.ndarray)
 
     for node in hnn.tree:
         assert isinstance(node.embedding, np.ndarray)
 
 
 def test_backward_pass(hnn, snli):
-    dim = 50
-    eps = 0.5
-
-    sample = next(snli.train_data)
+    sample = random.choice(snli.data)
     sen = random.choice(sample)
 
-    error_grad = np.random.random((dim, 1)) * 2 * eps - eps
+    error_grad = np.random.random((hnn.dim, 1)) * 2 * 0.1 - 0.1
 
     hnn.forward_pass(sen)
     words = [node.lower_ for node in hnn.tree if node.lower_ in snli.vocab]
+
+    # check that all of the words are in the vocab
+    for word in words:
+        assert word in snli.vocab
 
     # Save a copy of the word vectors before SGD update
     vectors = []
@@ -69,7 +60,7 @@ def test_backward_pass(hnn, snli):
 
     # Check that gradient norms are nonzero
     for word in words:
-        assert np.linalg.norm(hnn.vectors[word]) != 0
+        assert np.linalg.norm(hnn.xgrads[word]) != 0
 
     # Save a copy of the word vectors after SGD update
     new_vectors = []
@@ -81,37 +72,23 @@ def test_backward_pass(hnn, snli):
         assert np.count_nonzero(pair[1] - pair[0]) == pair[0].size
 
 
-def test_embedding_gradients(hnn, snli):
-    dim = 50
-    n_labels = 3
-    n_gradient_checks = 25
-
-    logreg = LogisticRegression(n_features=dim, n_labels=n_labels)
-
-    sample = next(snli.train_data)
-    xs = random.choice(sample)
-    ys = np.zeros(n_labels)
-    ys[np.random.randint(0, n_labels, 1)] = 1
-    ys = ys.reshape(n_labels, 1)
+def test_embedding_gradients(hnn, snli, get_cost, num_grad, classifier):
+    xs, ys = random_data(snli)
 
     hnn.forward_pass(xs)
     words = [node.lower_ for node in hnn.tree if node.lower_ in snli.vocab]
 
+    print(xs)
     for _ in range(n_gradient_checks):
         for word in words:
+            print(word)
             idx = np.random.randint(0, hnn.vectors[word].size, size=1)
             params = hnn.vectors[word].flat
 
-            numerical = num_grad(hnn, params, idx, xs, ys, logreg)
-
+            numerical = num_grad(hnn, params, idx, xs, ys, classifier)
             hnn.forward_pass(xs)
-
-            logreg.train(hnn.get_root_embedding(), ys, rate=0.001)
-
-            error_grad = logreg.yi_grad
-
-            hnn.backward_pass(error_grad, rate=0.001)
-            node = [node for node in hnn.tree if node.lower_ == word].pop()
-            analytic = node.gradient.flat[idx]
+            classifier.train(hnn.get_root_embedding(), ys, rate=0.001)
+            hnn.backward_pass(classifier.yi_grad, rate=0.001)
+            analytic = hnn.xgrads[word].flat[idx]
 
             assert np.allclose(analytic, numerical)

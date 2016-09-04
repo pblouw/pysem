@@ -21,7 +21,7 @@ def cost(model, classifier, xs, ys):
     return classifier.get_cost(embedding, ys)
 
 
-def ngrad(model, params, idx, xs, ys, classifier, get_cost=cost, delta=1e-5):
+def ngrad(model, params, idx, xs, ys, classifier, get_cost=cost, delta=1e-6):
     val = np.copy(params[idx])
 
     params[idx] = val + delta
