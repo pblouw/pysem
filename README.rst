@@ -40,7 +40,7 @@ Examples:
 
 In the examples directory, there are Jupyter notebooks illustrating the creation of:
 
-* unsupervised models that learning word embeddings from Wikipedia text
+* unsupervised models that learn word embeddings from Wikipedia text
 
 * classification models for predicting inferential relations betweeen sentences
 
@@ -53,7 +53,7 @@ Installation
 
 Pysem requires Python 3, mostly to support effective multiprocessing. To install other requirements and library itself, do the following:
 
-
+.. code:: shell
     pip install -r requirements.txt
     python setup.py develop --user
 
