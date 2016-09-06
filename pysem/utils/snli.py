@@ -65,6 +65,7 @@ class CompositeModel(object):
         for n in range(self.iters):
             batch = random.sample(self.train_data, self.bsize)
             for sample in batch:
+                self.encoder.tree = None
                 s1 = sample.sentence1
                 s2 = sample.sentence2
                 ys = SNLI.binarize([sample.label])
@@ -74,7 +75,6 @@ class CompositeModel(object):
                 w2 = [n.lower_ for n in self.encoder_copy.tree]
                 self.word_set = set(w1 + w2)
                 self.dnn_encoder_update()
-                self.encoder.tree = None
 
             self._log_status(n)
 

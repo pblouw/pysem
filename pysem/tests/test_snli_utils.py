@@ -37,6 +37,9 @@ def test_rnn_accuracy(snli):
 
     assert 0 < acc < 0.65
 
+    model.train(epochs=0.1, bsize=1, rate=0.01, acc_interval=1)
+    assert len(model.acc) > 3
+
 
 def test_dnn_accuracy(snli):
     snli.reset_streams()
@@ -48,3 +51,6 @@ def test_dnn_accuracy(snli):
     acc = model.dnn_accuracy()
 
     assert 0 < acc < 0.65
+
+    model.train(epochs=0.1, bsize=1, rate=0.01, acc_interval=1)
+    assert len(model.acc) > 3
