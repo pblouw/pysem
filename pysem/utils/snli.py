@@ -89,7 +89,7 @@ class CompositeModel(object):
 
                 w1 += [n.lower_ for n in self.encoder.tree]
                 w2 += [n.lower_ for n in self.encoder_copy.tree]
-            
+
             self.word_set = set(w1 + w2)
             self.dnn_encoder_update()
             self._log_status(n)
