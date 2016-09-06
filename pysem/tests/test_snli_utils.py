@@ -40,8 +40,6 @@ def test_rnn_accuracy(snli):
     model.train(iters=2, bsize=1, rate=0.01, acc_interval=2)
     assert len(model.acc) == 2
 
-    model.plot(noshow=True)
-
 
 def test_dnn_accuracy(snli):
     snli.reset_streams()
@@ -56,8 +54,6 @@ def test_dnn_accuracy(snli):
 
     model.train(iters=2, bsize=1, rate=0.01, acc_interval=2)
     assert len(model.acc) == 2
-
-    model.plot(noshow=True)
 
 
 def test_average():
