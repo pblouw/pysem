@@ -9,6 +9,16 @@ from itertools import islice
 from copy import deepcopy
 
 
+def average(array, acc, span):
+    for _ in range(round(len(array) / span) + 1):
+        denom = len(array[:span])
+        if denom > 0:
+            val = sum(array[:span]) / span
+            acc.append(val)
+            array = array[span:]
+    return acc
+
+
 class CompositeModel(object):
     '''Combines a sentence encoder with a classifier to create a complete
     model for predicting inferential relationships on the SNLI dataset.
@@ -26,9 +36,9 @@ class CompositeModel(object):
         if isinstance(self.encoder, DependencyNetwork):
             self.acc = [self.dnn_accuracy()]
 
-    def train(self, epochs, bsize, rate=0.01, acc_interval=1000):
-        '''Train the model for the specified number of epochs.'''
-        self.iters = round((len(self.train_data) * epochs) / bsize)
+    def train(self, iters, bsize, rate=0.01, acc_interval=1000):
+        '''Train the model for the specified number of iterations.'''
+        self.iters = iters
         self.bsize = bsize
         self.rate = rate
         self.acc_interval = acc_interval
@@ -40,8 +50,8 @@ class CompositeModel(object):
 
     def _log_status(self, n):
         '''Keep track of training progress to log accuracy, print status.'''
-        if n % 200 == 0 and n != 0:
-            print('Completed ', n, ' training batches.')
+        # if n % 200 == 0 and n != 0:
+        #     print('Completed ', n, ' training batches.')
         if n % self.acc_interval == 0 and n != 0:
             if isinstance(self.encoder, RecurrentNetwork):
                 self.acc.append(self.rnn_accuracy())
@@ -51,6 +61,8 @@ class CompositeModel(object):
     def _train_recurrent_model(self):
         '''Adapt training regime to accomodate recurrent encoder structure.'''
         for n in range(self.iters):
+            print('On iteration ', n)
+            self.encoder_copy = deepcopy(self.encoder)
             batch = random.sample(self.train_data, self.bsize)
             s1s = [sample.sentence1 for sample in batch]
             s2s = [sample.sentence2 for sample in batch]
@@ -63,24 +75,27 @@ class CompositeModel(object):
     def _train_recursive_model(self):
         '''Adapt training regime to accomodate recursive encoder structure.'''
         for n in range(self.iters):
+            print('On iteration ', n)
+            self.encoder.tree = None
+            self.encoder_copy = deepcopy(self.encoder)
             batch = random.sample(self.train_data, self.bsize)
+            w1 = []
+            w2 = []
             for sample in batch:
-                self.encoder.tree = None
                 s1 = sample.sentence1
                 s2 = sample.sentence2
                 ys = SNLI.binarize([sample.label])
                 self.training_iteration(s1, s2, ys)
 
-                w1 = [n.lower_ for n in self.encoder.tree]
-                w2 = [n.lower_ for n in self.encoder_copy.tree]
-                self.word_set = set(w1 + w2)
-                self.dnn_encoder_update()
-
+                w1 += [n.lower_ for n in self.encoder.tree]
+                w2 += [n.lower_ for n in self.encoder_copy.tree]
+            
+            self.word_set = set(w1 + w2)
+            self.dnn_encoder_update()
             self._log_status(n)
 
     def training_iteration(self, s1, s2, ys):
         '''Use input sentences to compute weight updates on encoder.'''
-        self.encoder_copy = deepcopy(self.encoder)
         self.encoder.forward_pass(s1)
         self.encoder_copy.forward_pass(s2)
 
@@ -136,16 +151,13 @@ class CompositeModel(object):
         label_dict = {0: 'entailment', 1: 'neutral', 2: 'contradiction'}
 
         for sample in self.dev_data:
-            self.encoder.tree = None
             label = sample.label
-            s1_encoder = self.encoder
-            s2_encoder = deepcopy(self.encoder)
 
-            s1_encoder.forward_pass(sample.sentence1)
-            s2_encoder.forward_pass(sample.sentence2)
+            self.encoder.forward_pass(sample.sentence1)
+            s1_emb = self.encoder.get_root_embedding()
 
-            s1_emb = s1_encoder.get_root_embedding()
-            s2_emb = s2_encoder.get_root_embedding()
+            self.encoder.forward_pass(sample.sentence2)
+            s2_emb = self.encoder.get_root_embedding()
 
             xs = np.concatenate((s1_emb, s2_emb))
             prediction = self.classifier.predict(xs)
@@ -153,8 +165,6 @@ class CompositeModel(object):
             pred = label_dict[prediction[0]]
             if pred == label:
                 count += 1
-
-        print(count / len(self.dev_data))
 
         return count / len(self.dev_data)
 
@@ -189,7 +199,11 @@ class CompositeModel(object):
 
         return n_correct / n_total
 
-    def plot(self):
+    def plot(self, noshow=False):
+        if isinstance(self.encoder, DependencyNetwork):
+            averaged_costs = average(self.classifier.costs, [], self.bsize)
+            self.classifier.costs = averaged_costs
+
         intr = self.acc_interval
         xlen = len(self.classifier.costs)
 
@@ -201,7 +215,8 @@ class CompositeModel(object):
         ax1.set_xlabel('Minibatches')
         ax1.set_ylabel('Cost', color='g')
         ax2.set_ylabel('Dev Set Accuracy', color='b')
-        plt.show()
+        if not noshow:
+            plt.show()
 
 
 def bow_accuracy(data, classifier, embedding_matrix, vectorizer):
