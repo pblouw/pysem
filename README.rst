@@ -53,8 +53,10 @@ Installation
 
 Pysem requires Python 3, mostly to support effective multiprocessing. To install other requirements and library itself, do the following:
 
-``pip install -r requirements.txt \n
-python setup.py develop --user``
+```bash
+pip install -r requirements.txt
+python setup.py develop --user
+```
 
 The --user flag can be omitted if you are using virtualenv or something equivalent. 
 
