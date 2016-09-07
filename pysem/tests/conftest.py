@@ -90,8 +90,7 @@ def treeLSTM(snli):
 
 
 @pytest.fixture(scope='module')
-def embedding_generator(snli):
-    dim = 25
+def embgen(snli):
     data = [d for d in snli.train_data]
 
     # build subvocabs for each dependency
@@ -113,5 +112,5 @@ def embedding_generator(snli):
 
 
 @pytest.fixture(scope='module')
-def tree_generator(snli):
+def tree_gen(snli):
     return TreeGenerator(dim=dim, vocab=snli.vocab)
