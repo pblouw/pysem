@@ -6,6 +6,12 @@ from pysem.utils.spacy import TokenWrapper
 from pysem.networks import DependencyNetwork, square_zeros
 
 
+class Node(object):
+    """A dummy tree node for predicting tree structure."""
+    def __init__(self, word):
+        self.lower_ = word
+
+
 class EmbeddingGenerator(DependencyNetwork):
     """A model that generates predictions for the words occupying each node in
     the dependency tree corresponding to a supplied sentence. The model takes
@@ -126,7 +132,12 @@ class EmbeddingGenerator(DependencyNetwork):
                 product = np.dot(self.word_weights[node.dep_], node.embedding)
                 node.probs = self.softmax(product)
                 idx = np.argmax(node.probs, axis=0)[0]
-                node.pword = self.idx_to_wrd[node.dep_][idx]
+
+                try:
+                    node.pword = self.idx_to_wrd[node.dep_][idx]
+                except KeyError:
+                    node.pword = 'none'
+
                 node.tvals = self.get_target_dist(node)
 
         computed = [node.computed for node in self.tree]
@@ -174,8 +185,12 @@ class EmbeddingGenerator(DependencyNetwork):
         '''Compute a target softmax distribution given the correct word at
         a node.'''
         array = np.zeros_like(node.probs)
-        idx = self.wrd_to_idx[node.dep_][node.lower_]
-        array[idx] = 1
+        try:
+            idx = self.wrd_to_idx[node.dep_][node.lower_]
+            array[idx] = 1
+        except KeyError:
+            pass
+
         return array
 
     def get_parent(self, node):
@@ -236,12 +251,12 @@ class TreeGenerator(DependencyNetwork):
 
     def compute_embeddings(self, node):
         # compute hidden state from input and previous hidden state
-        hh_inp = np.dot(self.whh, self.p_emb)
-        xh_inp = np.dot(self.wxh[node.dep_], self.x_emb)
+        hh_inp = np.dot(self.whh, self.prev)
+        xh_inp = np.dot(self.wxh[node.dep_], self.xinp)
 
         # set hidden state and predictions as node attributes
         node.embedding = np.tanh(hh_inp + xh_inp)
-        node.input = self.x_emb
+        node.input = self.xinp
 
         node.py_w = self.softmax(np.dot(self.why_w, node.embedding))
         node.py_h = self.softmax(np.dot(self.why_h, node.embedding))
@@ -253,20 +268,55 @@ class TreeGenerator(DependencyNetwork):
         node.ty_d = self.get_dep_target(node)
 
         # set predicted words, heads, deps, as node attributes
-        self.p_emb = node.embedding
+        self.prev = node.embedding
         node.pw = self.idx_to_wrd[np.argmax(node.py_w, axis=0)[0]]
         node.ph = self.idx_to_wrd[np.argmax(node.py_h, axis=0)[0]]
         node.pd = self.idx_to_dep[np.argmax(node.py_d, axis=0)[0]]
 
         node.computed = True
 
-    def forward_pass(self, embedding, target_sentence, train=True):
-        self.tree = [TokenWrapper(n) for n in self.parser(target_sentence)]
+    def predict_embedding(self):
+        if len(self.sequence) == 0:
+            xh_inp = np.dot(self.wxh['ROOT'], self.xinp)
+        else:
+            prev_node = self.sequence[-1]
+            dep = prev_node.pd
+            word = prev_node.pw
+            head = prev_node.ph
+
+            try:
+                self.xinp = self.vectors[dep] + self.vectors[word]
+                self.xinp += self.vectors[head]
+            except KeyError:
+                self.xinp = np.zeros_like(self.random_vector(self.dim))
+
+            xh_inp = np.dot(self.wxh[dep], self.xinp)
+
+        hh_inp = np.dot(self.whh, self.prev)
+
+        node = Node('placeholder')
+        node.embedding = np.tanh(hh_inp + xh_inp)
+        node.input = self.xinp
+
+        node.py_w = self.softmax(np.dot(self.why_w, node.embedding))
+        node.py_h = self.softmax(np.dot(self.why_h, node.embedding))
+        node.py_d = self.softmax(np.dot(self.why_d, node.embedding))
+
+        self.prev = node.embedding
+        node.pw = self.idx_to_wrd[np.argmax(node.py_w, axis=0)[0]]
+        node.ph = self.idx_to_wrd[np.argmax(node.py_h, axis=0)[0]]
+        node.pd = self.idx_to_dep[np.argmax(node.py_d, axis=0)[0]]
+
+        node.computed = True
+        self.sequence.append(node)
+
+    def forward_pass(self, embedding, target):
+        self.tree = [TokenWrapper(n) for n in self.parser(target)]
         self.root_embedding = embedding
         self.sequence = []
 
-        self.p_emb = np.zeros_like(embedding)
-        self.x_emb = embedding
+        self.prev = np.zeros_like(embedding)
+        self.xinp = embedding
 
         for node in self.tree:
             if node.head.idx == node.idx:
@@ -284,11 +334,19 @@ class TreeGenerator(DependencyNetwork):
                 parent = self.get_parent(node)
 
                 if parent in self.sequence and parent.computed:
-                    ctx = [node.head.lower_, node.dep_, node.lower_]
-                    self.x_emb = sum([np.copy(self.vectors[c]) for c in ctx
-                                      if c in self.vectors])
+                    try:
+                        ctx = [parent.head.lower_, parent.dep_, parent.lower_]
+                        self.xinp = sum([np.copy(self.vectors[c]) for c in ctx
+                                         if c in self.vectors])
+                    except KeyError:
+                        self.xinp = np.zeros_like(self.random_vector(self.dim))
                     self.compute_embeddings(node)
                     self.sequence.append(node)
+
+        if len(self.sequence) == len(self.tree):
+            return
+        else:
+            self.extend_sequence()
 
     def backward_pass(self, rate=0.01):
         dwxh = defaultdict(square_zeros(self.dim))
@@ -335,16 +393,34 @@ class TreeGenerator(DependencyNetwork):
             count = sum([1 for node in self.sequence if node.dep_ == dep])
             self.wxh[dep] -= rate * (dwxh[dep] / count)
 
+    def predict(self, embedding, target_len):
+        self.root_embedding = embedding
+        self.sequence = []
+
+        self.prev = np.zeros_like(embedding)
+        self.xinp = embedding
+
+        while True:
+            self.predict_embedding()
+            if len(self.sequence) == target_len:
+                break
+
     def get_word_target(self, node):
         array = np.zeros_like(node.py_w)
-        idx = self.wrd_to_idx[node.lower_]
-        array[idx] = 1
+        try:
+            idx = self.wrd_to_idx[node.lower_]
+            array[idx] = 1
+        except KeyError:
+            pass
         return array
 
     def get_head_target(self, node):
         array = np.zeros_like(node.py_h)
-        idx = self.wrd_to_idx[node.head.lower_]
-        array[idx] = 1
+        try:
+            idx = self.wrd_to_idx[node.head.lower_]
+            array[idx] = 1
+        except KeyError:
+            pass
         return array
 
     def get_dep_target(self, node):

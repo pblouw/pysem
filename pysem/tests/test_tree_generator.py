@@ -4,7 +4,8 @@ import numpy as np
 
 def test_tree_generator(tree_gen, dnn, snli):
     iters = 50
-    rate = 0.1
+    rate = 0.05
+    n = 10
 
     sample = random.choice(snli.data)
     s1 = sample.sentence1
@@ -31,3 +32,7 @@ def test_tree_generator(tree_gen, dnn, snli):
         assert node.lower_ == node.pw
         assert node.dep_ == node.pd
         assert node.head.lower_ == node.ph
+
+    tree_gen.predict(dnn.get_root_embedding(), n)
+
+    assert len(tree_gen.sequence) == n
