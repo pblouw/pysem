@@ -19,23 +19,25 @@ class LSTM(RecursiveModel):
         # initialize input gate weights
         self.iW = self.random_weights(dim)
         self.iU = self.random_weights(dim)
-        self.i_bias = 5 * np.ones(self.dim).reshape((self.dim, 1))
+        self.i_bias = 3 * np.ones(self.dim).reshape((self.dim, 1))
 
         # initialize forget gate weights
         self.fW = self.random_weights(dim)
         self.fU = self.random_weights(dim)
-        self.f_bias = 5 * np.ones(self.dim).reshape((self.dim, 1))
+        self.f_bias = 3 * np.ones(self.dim).reshape((self.dim, 1))
 
         # initialize output gate weights
         self.oW = self.random_weights(dim)
         self.oU = self.random_weights(dim)
-        self.o_bias = 5 * np.ones(self.dim).reshape((self.dim, 1))
+        self.o_bias = 3 * np.ones(self.dim).reshape((self.dim, 1))
 
         # initialize cell input weights
         self.uW = self.random_weights(dim)
         self.uU = self.random_weights(dim)
-        self.u_bias = 0 * np.ones(self.dim).reshape((self.dim, 1))
+        self.u_bias = 0.1 * np.ones(self.dim).reshape((self.dim, 1))
 
+        self.yW = self.random_weights(dim)
+        self.y_bias = 0.1 * np.ones(self.dim).reshape((self.dim, 1))
         self.pretrained_vecs(pretrained) if pretrained else self.random_vecs()
 
     def clip_grad(self, gradient, clipval=5):
@@ -69,6 +71,8 @@ class LSTM(RecursiveModel):
             self.xs[i] = xs
             self.ws[i] = words
 
+        self.ys = np.tanh(np.dot(self.yW, self.hs[i]) + self.y_bias)
+
     def forward_pass(self, batch):
         '''Convert input sentence into sequence and compute cell states.'''
         self.batch = [nltk.word_tokenize(sen) for sen in batch]
@@ -91,10 +95,14 @@ class LSTM(RecursiveModel):
 
     def backward_pass(self, error_grad, rate=0.1):
         '''Compute gradients for all weights in the LSTM'''
+        error_grad *= self.tanh_grad(self.ys)
+
+        self.dyW = np.dot(error_grad, self.hs[self.seqlen-1].T)
         self.diW = np.zeros_like(self.iW)
         self.doW = np.zeros_like(self.oW)
         self.dfW = np.zeros_like(self.fW)
         self.duW = np.zeros_like(self.uW)
+        self.dyW = np.zeros_like(self.yW)
 
         self.diU = np.zeros_like(self.iU)
         self.doU = np.zeros_like(self.oU)
@@ -105,10 +113,11 @@ class LSTM(RecursiveModel):
         self.f_bias_grad = np.zeros_like(self.f_bias)
         self.o_bias_grad = np.zeros_like(self.o_bias)
         self.u_bias_grad = np.zeros_like(self.u_bias)
+        self.y_bias_grad = np.sum(error_grad, axis=1).reshape(self.dim, 1)
 
         self.xgrads = defaultdict(flat_zeros(self.dim))
 
-        h_grad = error_grad
+        h_grad = np.dot(self.yW.T, error_grad)
         s_grad = np.zeros_like(error_grad)
 
         # compute all gradients in reverse through the sequence
@@ -172,6 +181,7 @@ class LSTM(RecursiveModel):
             s_grad = self.f_gates[i] * d_cell_state
 
         # clip gradients
+        self.dyW = self.dyW / self.bsize
         self.doW = self.doW / self.bsize
         self.dfW = self.dfW / self.bsize
         self.diW = self.diW / self.bsize
@@ -184,10 +194,12 @@ class LSTM(RecursiveModel):
         self.f_bias_grad = self.f_bias_grad / self.bsize
         self.o_bias_grad = self.o_bias_grad / self.bsize
         self.u_bias_grad = self.u_bias_grad / self.bsize
+        self.y_bias_grad = self.y_bias_grad / self.bsize
 
         self.xgrads = {w: g / self.bsize for w, g in self.xgrads.items()}
 
         # perform weight updates
+        self.yW -= rate * self.dyW
         self.oW -= rate * self.doW
         self.fW -= rate * self.dfW
         self.iW -= rate * self.diW
@@ -202,6 +214,7 @@ class LSTM(RecursiveModel):
         self.f_bias -= rate * self.f_bias_grad
         self.o_bias -= rate * self.o_bias_grad
         self.u_bias -= rate * self.u_bias_grad
+        self.y_bias -= rate * self.y_bias_grad
 
         # update word embeddings
         word_set = [w.lower() for w in set(flatten(self.batch)) if w != 'PAD']
@@ -209,7 +222,10 @@ class LSTM(RecursiveModel):
 
         for word in word_set:
             count = all_words.count(word)
-            self.vectors[word] -= rate * self.xgrads[word] / count
+            try:
+                self.vectors[word] -= rate * self.xgrads[word] / count
+            except KeyError:
+                pass
 
     def to_array(self, words):
         '''Build input array from words in a given sequence position.'''
@@ -224,7 +240,7 @@ class LSTM(RecursiveModel):
 
     def get_root_embedding(self):
         '''Returns the embeddings for the final/root node in the sequence.'''
-        return np.copy(self.hs[self.seqlen-1])
+        return self.ys
 
 
 class TreeLSTM(RecursiveModel):
