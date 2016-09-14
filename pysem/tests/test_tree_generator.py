@@ -3,7 +3,7 @@ import numpy as np
 
 
 def test_tree_generator(tree_gen, dnn, snli):
-    iters = 50
+    iters = 100
     rate = 0.05
     n = 10
 
