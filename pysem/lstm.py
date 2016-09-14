@@ -312,6 +312,7 @@ class TreeLSTM(RecursiveModel):
 
             if not node.computed and parent.computed:
                 c_grad = node.o_gate * node.top_grad
+                c_grad *= self.tanh_grad(np.tanh(node.cell_state))
                 c_grad += parent.c_grad * parent.f_gates[node.idx]
                 node.c_grad = c_grad
                 self.grad_update(node)
@@ -326,7 +327,7 @@ class TreeLSTM(RecursiveModel):
         emb_grad = np.zeros_like(node.c_grad)
 
         # gradients for output gate
-        o_grad = node.cell_state * node.top_grad
+        o_grad = np.tanh(node.cell_state) * node.top_grad
         node.o_grad = o_grad * self.sigmoid_grad(node.o_gate)
 
         self.doW += np.dot(node.o_grad, node.inp_vec.T)
@@ -389,7 +390,6 @@ class TreeLSTM(RecursiveModel):
         try:
             node.inp_vec = np.copy(self.vectors[node.lower_])
         except KeyError:
-            print('KeyError', node.lower_)
             node.inp_vec = np.zeros(self.dim).reshape((self.dim, 1))
 
         i_gate = np.dot(self.iW, node.inp_vec) + np.dot(self.iU, node.h_tilda)
@@ -410,7 +410,7 @@ class TreeLSTM(RecursiveModel):
             node.f_gates[child.idx] = self.sigmoid(f_gate + self.f_bias)
             node.cell_state += node.f_gates[child.idx] * child.cell_state
 
-        node.embedding = node.o_gate * node.cell_state
+        node.embedding = node.o_gate * np.tanh(node.cell_state)
         node.computed = True
 
     def update_word_embeddings(self):
@@ -525,4 +525,5 @@ class TreeLSTM(RecursiveModel):
             if node.head.idx == node.idx:
                 node.top_grad = grad
                 node.c_grad = node.o_gate * grad
+                node.c_grad *= self.tanh_grad(np.tanh(node.cell_state))
                 self.grad_update(node)
