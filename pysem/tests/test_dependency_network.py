@@ -37,7 +37,6 @@ def test_token_wrapper(dnn, snli):
 
     assert node.computed is False
     assert node.gradient is None
-    assert node.__str__() in dnn.vocab
     assert node.dep_ in dnn.deps
 
 
