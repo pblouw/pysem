@@ -244,10 +244,10 @@ class TreeGenerator(DependencyNetwork):
         self.why_d = np.random.random((len(self.deps), dim)) * scale
 
         self.wxh = defaultdict(square_zeros(self.dim))
-        self.whh = self.random_weights(self.dim)
+        self.whh = self.random_weights(self.dim, self.dim)
 
         for dep in self.deps:
-            self.wxh[dep] = self.random_weights(self.dim)
+            self.wxh[dep] = self.random_weights(self.dim, self.dim)
 
     def compute_embeddings(self, node):
         # compute hidden state from input and previous hidden state

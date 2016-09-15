@@ -86,10 +86,10 @@ class RecursiveModel(object):
         return identity + gaussian
 
     @staticmethod
-    def random_weights(dim):
-        '''Returns matrix of values sampled from +- 1/root(dim) interval.'''
-        eps = 1.0 / np.sqrt(dim)
-        weights = np.random.random((dim, dim)) * 2 * eps - eps
+    def random_weights(d1, d2):
+        '''Returns matrix of values sampled uniformly from eps interval.'''
+        eps = 1.0 / np.sqrt((d1 + d2) / 2)
+        weights = np.random.random((d1, d2)) * 2 * eps - eps
         return weights
 
     @staticmethod

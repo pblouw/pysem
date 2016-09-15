@@ -85,7 +85,7 @@ def lstm(snli):
 
 @pytest.fixture(scope='module')
 def treeLSTM(snli):
-    lstm = TreeLSTM(dim=dim, vocab=snli.vocab)
+    lstm = TreeLSTM(input_dim=dim, cell_dim=dim*2, vocab=snli.vocab)
     return lstm
 
 

@@ -16,26 +16,26 @@ class LSTM(RecursiveModel):
         self.vocab = sorted(vocab)
 
         # initialize input gate weights
-        self.iW = self.random_weights(dim)
-        self.iU = self.random_weights(dim)
+        self.iW = self.random_weights(dim, dim)
+        self.iU = self.random_weights(dim, dim)
         self.i_bias = 3 * np.zeros((self.dim, 1))
 
         # initialize forget gate weights
-        self.fW = self.random_weights(dim)
-        self.fU = self.random_weights(dim)
+        self.fW = self.random_weights(dim, dim)
+        self.fU = self.random_weights(dim, dim)
         self.f_bias = 3 * np.zeros((self.dim, 1))
 
         # initialize output gate weights
-        self.oW = self.random_weights(dim)
-        self.oU = self.random_weights(dim)
+        self.oW = self.random_weights(dim, dim)
+        self.oU = self.random_weights(dim, dim)
         self.o_bias = 3 * np.zeros((self.dim, 1))
 
         # initialize cell input weights
-        self.uW = self.random_weights(dim)
-        self.uU = self.random_weights(dim)
+        self.uW = self.random_weights(dim, dim)
+        self.uU = self.random_weights(dim, dim)
         self.u_bias = 0.1 * np.ones((self.dim, 1))
 
-        self.yW = self.random_weights(dim)
+        self.yW = self.random_weights(dim, dim)
         self.y_bias = 0.1 * np.ones(self.dim).reshape((self.dim, 1))
         self.pretrained_vecs(pretrained) if pretrained else self.random_vecs()
 
@@ -241,29 +241,31 @@ class TreeLSTM(RecursiveModel):
     the network, in that the same weights are shared across all dependencies
     in the network's tree structure.
     """
-    def __init__(self, dim, vocab, pretrained=False):
-        self.dim = dim
+    def __init__(self, input_dim, cell_dim, vocab, pretrained=False):
+        self.dim = input_dim
+        self.i_dim = input_dim
+        self.c_dim = cell_dim
         self.vocab = sorted(vocab)
 
         # initialize input gate weights
-        self.iW = self.random_weights(dim)
-        self.iU = self.random_weights(dim)
-        self.i_bias = 3 * np.ones((self.dim, 1))
+        self.iW = self.random_weights(cell_dim, input_dim)
+        self.iU = self.random_weights(cell_dim, cell_dim)
+        self.i_bias = 3 * np.ones((cell_dim, 1))
 
         # initialize forget gate weights
-        self.fW = self.random_weights(dim)
-        self.fU = self.random_weights(dim)
-        self.f_bias = 3 * np.ones((self.dim, 1))
+        self.fW = self.random_weights(cell_dim, input_dim)
+        self.fU = self.random_weights(cell_dim, cell_dim)
+        self.f_bias = 3 * np.ones((cell_dim, 1))
 
         # initialize output gate weights
-        self.oW = self.random_weights(dim)
-        self.oU = self.random_weights(dim)
-        self.o_bias = 3 * np.ones((self.dim, 1))
+        self.oW = self.random_weights(cell_dim, input_dim)
+        self.oU = self.random_weights(cell_dim, cell_dim)
+        self.o_bias = 3 * np.ones((cell_dim, 1))
 
         # initialize cell input weights
-        self.uW = self.random_weights(dim)
-        self.uU = self.random_weights(dim)
-        self.u_bias = 0.2 * np.ones((self.dim, 1))
+        self.uW = self.random_weights(cell_dim, input_dim)
+        self.uU = self.random_weights(cell_dim, cell_dim)
+        self.u_bias = 0.2 * np.ones((cell_dim, 1))
 
         self.pretrained_vecs(pretrained) if pretrained else self.random_vecs()
 
@@ -307,8 +309,8 @@ class TreeLSTM(RecursiveModel):
 
     def grad_update(self, node):
 
-        x_grad = np.zeros((self.dim, 1))
-        h_grad = np.zeros((self.dim, 1))
+        x_grad = np.zeros((self.i_dim, 1))
+        h_grad = np.zeros((self.c_dim, 1))
 
         # gradients for output gate
         o_grad = np.tanh(node.cell_state) * node.h_grad
@@ -368,11 +370,11 @@ class TreeLSTM(RecursiveModel):
         if len(children) > 0:
             node.h_tilda = sum([node.embedding for node in children])
         else:
-            node.h_tilda = np.zeros((self.dim, 1))
+            node.h_tilda = np.zeros((self.c_dim, 1))
         try:
             node.inp_vec = np.copy(self.vectors[node.lower_])
         except KeyError:
-            node.inp_vec = np.zeros((self.dim, 1))
+            node.inp_vec = np.zeros((self.i_dim, 1))
 
         i_gate = np.dot(self.iW, node.inp_vec) + np.dot(self.iU, node.h_tilda)
         node.i_gate = self.sigmoid(i_gate + self.i_bias)
@@ -437,7 +439,7 @@ class TreeLSTM(RecursiveModel):
     def backward_pass(self, error_grad, rate=0.01):
         '''Compute gradients for every weight matrix and input word vector
         used when computing activations in accordance with the comp graph.'''
-        self.x_grads = defaultdict(flat_zeros(self.dim))
+        self.x_grads = defaultdict(flat_zeros(self.i_dim))
 
         self.diW = np.zeros_like(self.iW)
         self.doW = np.zeros_like(self.oW)

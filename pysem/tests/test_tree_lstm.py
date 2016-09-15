@@ -1,6 +1,8 @@
 import random
 import numpy as np
 
+from pysem.utils.ml import LogisticRegression
+
 n_gradient_checks = 25
 n_labels = 3
 rate = 0.001
@@ -40,13 +42,10 @@ def test_forward_pass(treeLSTM, snli):
 
 
 def test_backward_pass(treeLSTM, snli):
-    dim = 50
-    eps = 0.5
-
     sample = next(snli.train_data)
     sen = random.choice(sample)
 
-    error_grad = np.random.random((dim, 1)) * 2 * eps - eps
+    error_grad = np.random.random((100, 1)) * 2 * 0.5 - 0.5
 
     treeLSTM.forward_pass(sen)
     treeLSTM.backward_pass(error_grad)
@@ -57,6 +56,7 @@ def test_backward_pass(treeLSTM, snli):
 
 def test_gate_gradients(treeLSTM, snli, get_cost, num_grad, classifier):
     xs, ys = random_data(snli)
+    classifier = LogisticRegression(n_features=100, n_labels=3)
 
     # test input to output gate weights
     for _ in range(n_gradient_checks):
@@ -121,6 +121,7 @@ def test_gate_gradients(treeLSTM, snli, get_cost, num_grad, classifier):
 
 def test_cell_inp_gradients(treeLSTM, snli, get_cost, num_grad, classifier):
     xs, ys = random_data(snli)
+    classifier = LogisticRegression(n_features=100, n_labels=3)
 
     # test prev state to cell input weights
     for _ in range(n_gradient_checks):
@@ -145,6 +146,7 @@ def test_cell_inp_gradients(treeLSTM, snli, get_cost, num_grad, classifier):
 
 def test_bias_gradients(treeLSTM, snli, get_cost, num_grad, classifier):
     xs, ys = random_data(snli)
+    classifier = LogisticRegression(n_features=100, n_labels=3)
 
     # test bias gradient for input gate
     for _ in range(n_gradient_checks):
@@ -189,6 +191,7 @@ def test_bias_gradients(treeLSTM, snli, get_cost, num_grad, classifier):
 
 def test_input_vec_gradients(treeLSTM, snli, get_cost, num_grad, classifier):
     xs, ys = random_data(snli)
+    classifier = LogisticRegression(n_features=100, n_labels=3)
 
     treeLSTM.forward_pass(xs)
     words = [n.lower_ for n in treeLSTM.tree]
