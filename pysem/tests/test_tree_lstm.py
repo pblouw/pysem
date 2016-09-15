@@ -52,7 +52,7 @@ def test_backward_pass(treeLSTM, snli):
     treeLSTM.backward_pass(error_grad)
 
     for node in treeLSTM.tree:
-        assert isinstance(node.top_grad, np.ndarray)
+        assert isinstance(node.h_grad, np.ndarray)
 
 
 def test_gate_gradients(treeLSTM, snli, get_cost, num_grad, classifier):
@@ -201,6 +201,6 @@ def test_input_vec_gradients(treeLSTM, snli, get_cost, num_grad, classifier):
 
             numerical = num_grad(treeLSTM, params, idx, xs, ys, classifier)
             train_step(treeLSTM, classifier, xs, ys)
-            analytic = treeLSTM.xgrads[word].flat[idx]
+            analytic = treeLSTM.x_grads[word].flat[idx]
 
             assert np.allclose(analytic, numerical)

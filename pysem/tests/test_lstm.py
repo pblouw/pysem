@@ -195,6 +195,6 @@ def test_input_vector_gradients(lstm, snli, get_cost, num_grad, classifier):
 
             numerical_grad = num_grad(lstm, params, idx, xs, ys, classifier)
             train_step(lstm, classifier, xs, ys)
-            analytic_grad = lstm.xgrads[word].flat[idx]
+            analytic_grad = lstm.x_grads[word].flat[idx]
 
             assert np.allclose(analytic_grad, numerical_grad)
