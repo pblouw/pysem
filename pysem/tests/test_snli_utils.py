@@ -37,8 +37,8 @@ def test_rnn_accuracy(snli):
 
     assert 0 < model.acc[0] < 0.65
 
-    model.train(iters=2, bsize=1, rate=0.01, acc_interval=2)
-    assert len(model.acc) == 2
+    model.train(iters=2, bsize=1, rate=0.01, log_interval=2)
+    assert len(model.acc) == 3
 
 
 def test_dnn_accuracy(snli):
@@ -52,8 +52,8 @@ def test_dnn_accuracy(snli):
 
     assert 0 < model.acc[0] < 0.65
 
-    model.train(iters=2, bsize=1, rate=0.01, acc_interval=2)
-    assert len(model.acc) == 2
+    model.train(iters=2, bsize=1, rate=0.01, log_interval=2)
+    assert len(model.acc) == 3
 
 
 def test_average():

@@ -24,6 +24,9 @@ class CompositeModel(object):
     model for predicting inferential relationships on the SNLI dataset.
     '''
     def __init__(self, data, encoder, classifier):
+        data.reset_streams()
+        data.extractor = data.get_xy_pairs
+
         self.encoder = encoder
         self.classifier = classifier
 
@@ -36,12 +39,13 @@ class CompositeModel(object):
         if isinstance(self.encoder, DependencyNetwork):
             self.acc = [self.dnn_accuracy()]
 
-    def train(self, iters, bsize, rate=0.01, acc_interval=1000):
+    def train(self, iters, bsize, rate=0.01, log_interval=1000, schedule=1000):
         '''Train the model for the specified number of iterations.'''
         self.iters = iters
         self.bsize = bsize
         self.rate = rate
-        self.acc_interval = acc_interval
+        self.acc_interval = log_interval
+        self.anneal_schedule = schedule
 
         if isinstance(self.encoder, RecurrentNetwork):
             self._train_recurrent_model()
@@ -50,8 +54,10 @@ class CompositeModel(object):
 
     def _log_status(self, n):
         '''Keep track of training progress to log accuracy, print status.'''
-        # if n % 200 == 0 and n != 0:
-        #     print('Completed ', n, ' training batches.')
+        if n % self.anneal_schedule == 0 and n != 0:
+            self.rate = self.rate / 2.0
+            print('Learning rate annealed to ', self.rate)
+
         if n % self.acc_interval == 0 and n != 0:
             if isinstance(self.encoder, RecurrentNetwork):
                 self.acc.append(self.rnn_accuracy())
@@ -61,7 +67,6 @@ class CompositeModel(object):
     def _train_recurrent_model(self):
         '''Adapt training regime to accomodate recurrent encoder structure.'''
         for n in range(self.iters):
-            print('On iteration ', n)
             self.encoder_copy = deepcopy(self.encoder)
             batch = random.sample(self.train_data, self.bsize)
             s1s = [sample.sentence1 for sample in batch]
@@ -72,10 +77,11 @@ class CompositeModel(object):
             self.rnn_encoder_update()
             self._log_status(n)
 
+        self.acc.append(self.rnn_accuracy())
+
     def _train_recursive_model(self):
         '''Adapt training regime to accomodate recursive encoder structure.'''
         for n in range(self.iters):
-            print('On iteration ', n)
             self.encoder.tree = None
             self.encoder_copy = deepcopy(self.encoder)
             batch = random.sample(self.train_data, self.bsize)
@@ -93,6 +99,8 @@ class CompositeModel(object):
             self.word_set = set(w1 + w2)
             self.dnn_encoder_update()
             self._log_status(n)
+
+        self.acc.append(self.dnn_accuracy())
 
     def training_iteration(self, s1, s2, ys):
         '''Use input sentences to compute weight updates on encoder.'''
@@ -146,11 +154,14 @@ class CompositeModel(object):
                 s2_vec = np.copy(self.encoder_copy.vectors[word])
                 self.encoder.vectors[word] = (s1_vec + s2_vec) / 2.
 
-    def dnn_accuracy(self):
+    def dnn_accuracy(self, data=None):
+        if not data:
+            data = self.dev_data
+
         count = 0
         label_dict = {0: 'entailment', 1: 'neutral', 2: 'contradiction'}
 
-        for sample in self.dev_data:
+        for sample in data:
             label = sample.label
 
             self.encoder.forward_pass(sample.sentence1)
@@ -166,10 +177,12 @@ class CompositeModel(object):
             if pred == label:
                 count += 1
 
-        return count / len(self.dev_data)
+        return count / len(data)
 
-    def rnn_accuracy(self):
-        data = (x for x in self.dev_data)
+    def rnn_accuracy(self, data=None):
+        if not data:
+            data = (x for x in self.dev_data)
+
         n_correct = 0
         n_total = 0
 
