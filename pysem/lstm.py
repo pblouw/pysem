@@ -267,6 +267,9 @@ class TreeLSTM(RecursiveModel):
         self.uU = self.random_weights(cell_dim, cell_dim)
         self.u_bias = 0.2 * np.ones((cell_dim, 1))
 
+        self.yW = self.random_weights(input_dim, cell_dim)
+        self.y_bias = 0.2 * np.ones((input_dim, 1))
+
         self.pretrained_vecs(pretrained) if pretrained else self.random_vecs()
 
     def reset_comp_graph(self):
@@ -288,6 +291,11 @@ class TreeLSTM(RecursiveModel):
 
         nodes_computed = [node.computed for node in self.tree]
         if all(nodes_computed):
+            for node in self.tree:
+                if node.head.idx == node.idx:
+                    embedding = node.embedding
+            self.ys = np.dot(self.yW, embedding) + self.y_bias
+            self.ys = np.tanh(self.ys)
             return
         else:
             self.compute_embeddings()
@@ -429,6 +437,10 @@ class TreeLSTM(RecursiveModel):
         self.uU -= self.rate * self.duU
         self.u_bias -= self.rate * self.u_bias_grad
 
+        # update cell to output weights
+        self.yW -= self.rate * self.dyW
+        self.y_bias -= self.rate * self.y_bias_grad
+
     def forward_pass(self, sentence):
         '''Compute activations for every node in the computational graph
         generated from a dependency parse of the provided sentence.'''
@@ -480,15 +492,18 @@ class TreeLSTM(RecursiveModel):
 
     def get_root_embedding(self):
         '''Returns the embedding for the root node in the tree.'''
-        for node in self.tree:
-            if node.head.idx == node.idx:
-                return node.embedding
+        return self.ys
 
     def _set_root_gradient(self, grad):
         '''Set the error gradient on the root node in the comp graph.'''
+        grad *= self.tanh_grad(self.ys)
+
         for node in self.tree:
             if node.head.idx == node.idx:
-                node.h_grad = grad
-                node.cell_grad = node.o_gate * grad
+                self.dyW = np.dot(grad, node.embedding.T)
+                self.y_bias_grad = grad
+
+                node.h_grad = np.dot(self.yW.T, grad)
+                node.cell_grad = node.o_gate * node.h_grad
                 node.cell_grad *= self.tanh_grad(np.tanh(node.cell_state))
                 self.grad_update(node)
