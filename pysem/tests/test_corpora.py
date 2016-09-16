@@ -10,27 +10,26 @@ import numpy as np
 from pysem.corpora import Wikipedia, SNLI, SICK
 from pysem.utils.multiprocessing import max_strip
 
-wiki_path = os.getcwd() + '/pysem/tests/corpora/wikipedia/'
-snli_path = os.getcwd() + '/pysem/tests/corpora/snli/'
 sick_path = os.getcwd() + '/pysem/tests/corpora/sick/sicktest.txt'
 
 
-def test_wiki_streaming():
-    wp = Wikipedia(wiki_path)
+def test_wiki_streaming(wikipedia):
+    wikipedia.reset_streams()
 
-    assert isinstance(wp.articles, itertools.islice)
-    assert isinstance(wp.sentences, itertools.islice)
+    assert isinstance(wikipedia.articles, itertools.islice)
+    assert isinstance(wikipedia.sentences, itertools.islice)
 
-    assert isinstance(next(wp.articles), str)
-    assert isinstance(next(wp.sentences), str)
+    assert isinstance(next(wikipedia.articles), str)
+    assert isinstance(next(wikipedia.sentences), str)
 
-    all_articles = [a for a in wp.articles]
+    all_articles = [a for a in wikipedia.articles]
     assert len(all_articles) < 100
 
 
-def test_wiki_preprocessing():
-    wp = Wikipedia(wiki_path)
-    article = next(wp.articles)
+def test_wiki_preprocessing(wikipedia):
+    wikipedia.reset_streams()
+
+    article = next(wikipedia.articles)
 
     pattern = re.compile(r"<.*>")
     assert not pattern.findall(article)
@@ -39,64 +38,61 @@ def test_wiki_preprocessing():
     assert not pattern.findall(article)
 
 
-def test_wiki_caching(tmpdir):
+def test_wiki_caching(tmpdir, wikipedia):
+    wikipedia.reset_streams()
     cache_path = str(tmpdir) + '/'
+    wikipedia.write_to_cache(cache_path, process=max_strip, batchsize=100)
 
-    wp = Wikipedia(wiki_path)
-    wp.write_to_cache(cache_path, process=max_strip, batchsize=100)
-
-    wp_cache = Wikipedia(cache_path, from_cache=True)
-    article = next(wp_cache.articles)
+    wikipedia_cache = Wikipedia(cache_path, from_cache=True)
+    article = next(wikipedia_cache.articles)
     assert isinstance(article, str)
 
     pattern = re.compile(r"[0-9]|\[|\<|\(|\"|\'|\{")
     assert not pattern.findall(article)
 
-    all_cached_articles = [a for a in wp_cache.articles]
+    all_cached_articles = [a for a in wikipedia_cache.articles]
     assert len(all_cached_articles) < 100
 
 
-def test_wiki_vocab_build(tmpdir):
-    wp = Wikipedia(wiki_path, article_limit=1)
-    wp.build_vocab(threshold=0.05, batchsize=1)
+def test_wiki_vocab_build(tmpdir, wikipedia):
+    wikipedia.build_vocab(threshold=0.05, batchsize=1)
 
-    assert isinstance(wp.vocab, list)
-    assert isinstance(random.choice(wp.vocab), str)
-    assert len(wp.vocab) > 50
+    assert isinstance(wikipedia.vocab, list)
+    assert isinstance(random.choice(wikipedia.vocab), str)
+    assert len(wikipedia.vocab) > 50
 
     vocab_path = str(tmpdir) + '/'
-    wp.save_vocab(vocab_path + 'test.pickle')
+    wikipedia.save_vocab(vocab_path + 'test.pickle')
 
-    wp.vocab = None
-    wp.load_vocab(vocab_path + 'test.pickle')
+    wikipedia.vocab = None
+    wikipedia.load_vocab(vocab_path + 'test.pickle')
 
-    assert isinstance(wp.vocab, list)
-    assert isinstance(random.choice(wp.vocab), str)
-    assert len(wp.vocab) > 50
+    assert isinstance(wikipedia.vocab, list)
+    assert isinstance(random.choice(wikipedia.vocab), str)
+    assert len(wikipedia.vocab) > 50
 
 
-def test_wiki_stream_reset():
-    wp = Wikipedia(wiki_path)
-    for _ in wp.articles:
+def test_wiki_stream_reset(wikipedia):
+    wikipedia.reset_streams()
+    for _ in wikipedia.articles:
         continue
 
     with pytest.raises(StopIteration):
-        next(wp.articles)
+        next(wikipedia.articles)
 
-    wp.reset_streams()
-    assert isinstance(next(wp.articles), str)
-
-
-def test_wiki_article_limit():
-    wp = Wikipedia(wiki_path, article_limit=1)
-    all_articles = [a for a in wp.articles]
-
-    assert len(all_articles) == wp.article_limit
+    wikipedia.reset_streams()
+    assert isinstance(next(wikipedia.articles), str)
 
 
-def test_snli_streaming():
-    snli = SNLI(snli_path)
+def test_wiki_article_limit(wikipedia):
+    wikipedia.reset_streams()
+    all_articles = [a for a in wikipedia.articles]
 
+    assert len(all_articles) == wikipedia.article_limit
+
+
+def test_snli_streaming(snli):
+    snli.reset_streams()
     assert isinstance(snli.dev_data, types.GeneratorType)
     assert isinstance(snli.test_data, types.GeneratorType)
     assert isinstance(snli.train_data, types.GeneratorType)
@@ -109,8 +105,7 @@ def test_snli_streaming():
     assert len(samples) < 40
 
 
-def test_snli_vocab_build():
-    snli = SNLI(snli_path)
+def test_snli_vocab_build(snli):
     snli.build_vocab()
 
     assert isinstance(snli.vocab, list)
@@ -118,8 +113,8 @@ def test_snli_vocab_build():
     assert len(snli.vocab) > 100
 
 
-def test_snli_extractors():
-    snli = SNLI(snli_path)
+def test_snli_extractors(snli):
+    snli.reset_streams()
     snli.extractor = snli.get_xy_pairs
 
     xy_pair = next(snli.dev_data)

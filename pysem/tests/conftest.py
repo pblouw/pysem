@@ -2,13 +2,14 @@ import os
 import pytest
 import numpy as np
 
-from pysem.corpora import SNLI
+from pysem.corpora import SNLI, Wikipedia
 from pysem.networks import RecurrentNetwork, DependencyNetwork
 from pysem.networks import HolographicNetwork
 from pysem.generatives import EmbeddingGenerator, TreeGenerator
 from pysem.utils.ml import LogisticRegression
 from pysem.lstm import LSTM, TreeLSTM
 
+wiki_path = os.getcwd() + '/pysem/tests/corpora/wikipedia/'
 snli_path = os.getcwd() + '/pysem/tests/corpora/snli/'
 dim = 50
 n_labels = 3
@@ -42,6 +43,13 @@ def get_cost():
 @pytest.fixture(scope='session')
 def num_grad():
     return ngrad
+
+
+@pytest.fixture(scope='module')
+def wikipedia():
+    wiki = Wikipedia(wiki_path, article_limit=1)
+    wiki.build_vocab(threshold=0.05)
+    return wiki
 
 
 @pytest.fixture(scope='module')
