@@ -9,7 +9,67 @@ from pysem.networks import RecursiveModel, flat_zeros
 
 class LSTM(RecursiveModel):
     """A recurrent network that uses LSTM cells in place of the usual hidden
-    state representations.
+    hidden states. This implementation is designed to compress a sequence into
+    a single hidden representation rather than make a prediction for each item
+    in the input sequence. Batched computation is assumed by default, such
+    that each forward and backward pass will involve multiple input sentences.
+    Initial biases on the input, output, and forget weights are 1, which
+    ensures that all of the gates are both somewhat 'open' at the start of
+    training, and that the derivatives that get backpropagated through these
+    gates are not tiny.
+
+    Parameters:
+    ----------
+    input_dim : int
+        The dimensionality of the input vectors (i.e. the word embeddings).
+        Note that this is the same dimensionality of the final sentence
+        embedding produced by the LSTM.
+    cell_dim : int
+        The dimensionality of the LSTM cell states.
+    vocab : list of strings
+        The vocabulary of possible input items.
+    pretrained : str, defaults to False
+        The path to a pickled dictionary of pretrained word embeddings.
+
+    Attributes:
+    -----------
+    input_dim : int
+        The dimensionality of the input vectors (i.e. the word embeddings).
+    cell_dim : int
+        The dimensionality of the LSTM cell states.
+    vocab : list of strings
+        The vocabulary of possible input items.
+    iW : numpy.ndarray
+        The input-to-input-gate weight matrix.
+    iU : numpy.ndarray
+        The hidden-to-input-gate weight matrix.
+    fW : numpy.ndarray
+        The input-to-forget-gate weight matrix.
+    fU : numpy.ndarray
+        The hidden-to-forget-gate weight matrix.
+    oW : numpy.ndarray
+        The input-to-output-gate weight matrix.
+    oU : numpy.ndarray
+        The hidden-to-output-gate weight matrix.
+    uW : numpy.ndarray
+        The input-to-cell-input weight matrix.
+    uU : numpy.ndarray
+        The hidden-to-cell-input weight matrix.
+    yW : numpy.ndarray
+        The hidden-to-output weight matrix.
+    i_bias : numpy.ndarray
+        The bias vector on the input gate.
+    f_bias : numpy.ndarray
+        The bias vector on the forget gate.
+    o_bias : numpy.ndarray
+        The bias vector on the output gate.
+    u_bias : numpy.ndarray
+        The bias vector on the cell input.
+    y_bias : numpy.ndarray
+        The bias vector on the network output.
+    vectors : dict
+        Matches each vocabulary item with a vector embedding that is learned
+        over the course of training the network.
     """
     def __init__(self, input_dim, cell_dim, vocab, pretrained=False):
         self.dim = input_dim
@@ -35,14 +95,14 @@ class LSTM(RecursiveModel):
         # initialize cell input weights
         self.uW = self.random_weights(cell_dim, input_dim)
         self.uU = self.random_weights(cell_dim, cell_dim)
-        self.u_bias = 0.0 * np.ones((cell_dim, 1))
+        self.u_bias = 0.1 * np.ones((cell_dim, 1))
 
         self.yW = self.random_weights(input_dim, cell_dim)
-        self.y_bias = 0.0 * np.ones((input_dim, 1))
+        self.y_bias = 0.1 * np.ones((input_dim, 1))
         self.pretrained_vecs(pretrained) if pretrained else self.random_vecs()
 
     def compute_embeddings(self):
-        '''Compute LSTM cell states for each item in the sequence.'''
+        '''Compute LSTM cell and gate states for each item in the sequence.'''
         self.hs[-1] = np.zeros((self.c_dim, self.bsize))
         self.cell_states[-1] = np.zeros((self.c_dim, self.bsize))
 
@@ -68,7 +128,7 @@ class LSTM(RecursiveModel):
         self.ys = np.tanh(np.dot(self.yW, self.hs[i]) + self.y_bias)
 
     def forward_pass(self, batch):
-        '''Convert input sentence into sequence and compute cell states.'''
+        '''Convert input sentences into sequence and compute cell states.'''
         self.batch = [nltk.word_tokenize(sen) for sen in batch]
         self.bsize = len(batch)
         self.seqlen = max([len(s) for s in self.batch])
@@ -114,7 +174,7 @@ class LSTM(RecursiveModel):
         h_grad = np.dot(self.yW.T, error_grad)
         s_grad = np.zeros_like(h_grad)
 
-        # compute all gradients in reverse through the sequence
+        # compute gradients in reverse through the sequence
         for i in reversed(range(self.seqlen)):
             d_cell_state = h_grad * self.o_gates[i]
             d_cell_state *= self.tanh_grad(np.tanh(self.cell_states[i]))
@@ -175,7 +235,7 @@ class LSTM(RecursiveModel):
             h_grad = dh
             s_grad = self.f_gates[i] * d_cell_state
 
-        # clip gradients
+        # average gradients over the batch
         self.dyW = self.dyW / self.bsize
         self.doW = self.doW / self.bsize
         self.dfW = self.dfW / self.bsize
@@ -241,9 +301,62 @@ class LSTM(RecursiveModel):
 
 class TreeLSTM(RecursiveModel):
     """A dependency network that uses LSTM cells in place of the usual hidden
-    state representations. This is currently a syntactically tied version of
-    the network, in that the same weights are shared across all dependencies
-    in the network's tree structure.
+    state representations. This is currently a syntactically tied network, in
+    that the same weights are shared across all dependencies in the network's
+    tree structure.
+
+    Parameters:
+    ----------
+    input_dim : int
+        The dimensionality of the input vectors (i.e. the word embeddings).
+        Note that this is the same dimensionality of the final sentence
+        embedding produced by the LSTM.
+    cell_dim : int
+        The dimensionality of the LSTM cell states.
+    vocab : list of strings
+        The vocabulary of possible input items.
+    pretrained : str, defaults to False
+        The path to a pickled dictionary of pretrained word embeddings.
+
+    Attributes:
+    -----------
+    input_dim : int
+        The dimensionality of the input vectors (i.e. the word embeddings).
+    cell_dim : int
+        The dimensionality of the LSTM cell states.
+    vocab : list of strings
+        The vocabulary of possible input items.
+    iW : numpy.ndarray
+        The input-to-input-gate weight matrix.
+    iU : numpy.ndarray
+        The hidden-to-input-gate weight matrix.
+    fW : numpy.ndarray
+        The input-to-forget-gate weight matrix.
+    fU : numpy.ndarray
+        The hidden-to-forget-gate weight matrix.
+    oW : numpy.ndarray
+        The input-to-output-gate weight matrix.
+    oU : numpy.ndarray
+        The hidden-to-output-gate weight matrix.
+    uW : numpy.ndarray
+        The input-to-cell-input weight matrix.
+    uU : numpy.ndarray
+        The hidden-to-cell-input weight matrix.
+    yW : numpy.ndarray
+        The hidden-to-output weight matrix.
+    i_bias : numpy.ndarray
+        The bias vector on the input gate.
+    f_bias : numpy.ndarray
+        The bias vector on the forget gate.
+    o_bias : numpy.ndarray
+        The bias vector on the output gate.
+    u_bias : numpy.ndarray
+        The bias vector on the cell input.
+    y_bias : numpy.ndarray
+        The bias vector on the network output.
+    vectors : dict
+        Matches each vocabulary item with a vector embedding that is learned
+        over the course of training the network.
     """
     def __init__(self, input_dim, cell_dim, vocab, pretrained=False):
         self.dim = input_dim
@@ -305,6 +418,9 @@ class TreeLSTM(RecursiveModel):
             self.compute_embeddings()
 
     def compute_gradients(self):
+        '''Compute the gradients for the LSTM cells corresponding to each
+        node in the computational graph corresponding to the input sentence's
+        dependency structure.'''
         for node in self.tree:
             parent = self.get_parent(node)
 
@@ -320,7 +436,8 @@ class TreeLSTM(RecursiveModel):
             self.compute_gradients()
 
     def grad_update(self, node):
-
+        '''Compute gradients at a given node, provided the gradients of its
+        parent have been computed'''
         x_grad = np.zeros((self.i_dim, 1))
         h_grad = np.zeros((self.c_dim, 1))
 
@@ -377,7 +494,8 @@ class TreeLSTM(RecursiveModel):
 
     def update_node(self, node, children):
         '''Compute the state of the LSTM cell corresponding to the supplied
-        node in the parse tree, given the nodes corresponding to its children.
+        node in the computational graph, given the nodes corresponding to its
+        children.
         '''
         if len(children) > 0:
             node.h_tilda = sum([node.embedding for node in children])
