@@ -194,6 +194,7 @@ def test_input_vector_gradients(lstm, snli, get_cost, num_grad, classifier):
     lstm.forward_pass(xs)
     words = lstm.batch[0]
     words = [w.lower() for w in words if w != 'PAD']
+    words = [w for w in words if w in snli.vocab]
 
     # Use random element in each word embedding for n numerical gradient checks
     for _ in range(n_gradient_checks):
