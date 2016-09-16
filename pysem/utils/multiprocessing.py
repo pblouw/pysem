@@ -124,5 +124,6 @@ class PoolContainer(object):
         self.idx_to_word = {idx: word for idx, word in enumerate(self.vocab)}
 
     def zeros(self):
-        '''Returns an array of zeros for use in initializing defaultdicts'''
+        '''Returns an array of zeros for use in initializing defaultdicts in
+        multiprocessing pools'''
         return np.zeros(self.dim)

@@ -27,7 +27,10 @@ class RandomIndexing(object):
     Specific random indexing models are subclasses of this class that specify
     a unique encoding algorithm to be used to train the model. Subclasses also
     specify model-specific methods for retrieving and manipulating learned
-    embeddings in useful ways.
+    embeddings in useful ways. The methods in the base class that implement
+    training etc. make use of these specifications and thus only operate
+    as intended when called via an instance of an appropriately defined
+    subclass.
 
     Parameters:
     ----------
@@ -122,10 +125,13 @@ class RandomIndexing(object):
         return [(self.idx_to_word[x[0]], x[1]) for x in ranked[:n]]
 
     def _config_readonly(self):
+        '''Declares a PoolContainer as a global variable for shared
+        memory used by all processes in a multiprocessing pool.'''
         global readonly
         readonly = PoolContainer(self.dim, self.vocab)
 
     def _batches(self):
+        '''Use of islice requires that self.corpus.articles is a generator.'''
         while True:
             batch = list(islice(self.corpus.articles, self.batchsize))
             yield batch
@@ -205,6 +211,8 @@ class OrderEmbedding(RandomIndexing):
             print(item[0], item[1])
 
     def get_vector_encoding(self, phrase):
+        '''Converts a phrase query into a vector encoding the linguistic
+        context surrounding a target position'''
         words = phrase.split()
         index = words.index('__')
         probe = np.zeros(self.dim)
@@ -222,6 +230,8 @@ class OrderEmbedding(RandomIndexing):
         return normalize(probe)
 
     def _config_readonly(self):
+        '''Configures PoolContainer to include vectors that tag different
+        positional contexts around a target word'''
         global readonly
         readonly = PoolContainer(self.dim, self.vocab)
         readonly.build_position_tags()
@@ -235,32 +245,31 @@ class SyntaxEmbedding(RandomIndexing):
     def encode(article):
         doc = nlp(article)
         encodings = defaultdict(readonly.zeros)
+        targpos = 'VERB'
 
-        for sent in doc.sents:
-            for token in sent:
-                word = token.orth_.lower()
-                if word in readonly.vocab:
-                    pos = token.pos_
-
-                    children = [c for c in token.children]
-                    for c in children:
-                        dep = c.dep_
-
-                        if pos == 'VERB' and dep in readonly.verb_deps:
-                            role = readonly.verb_deps[dep]
-                            orth = c.orth_.lower()
-                            if orth in readonly.vocab:
-                                filler = readonly[orth].v
+        for sen in doc.sents:
+            for token in sen:
+                word = token.lower_
+                if word in readonly.vocab and token.pos_ == targpos:
+                    for c in token.children:
+                         if c.dep_ in readonly.verb_deps:
+                            role = readonly.verb_deps[c.dep_]
+                            if c.lower_ in readonly.vocab:
+                                filler = readonly[c.lower_].v
                                 binding = convolve(role, filler)
                                 encodings[word] += binding
         return encodings
 
     def _config_readonly(self):
+        '''Configures PoolContainer to include vectors that tag different
+        syntactic neighbors of a target word'''
         global readonly
         readonly = PoolContainer(self.dim, self.vocab)
         readonly.build_dependency_tags()
 
     def train(self, dim, batchsize=100):
+        '''Overrides usual RandomIndexing train method to run multiprocessing
+        pools on batches of articles instead of batches of sentences'''
         self.dim = dim
         self.batchsize = batchsize
         self.vectors = np.zeros((len(self.vocab), dim))
