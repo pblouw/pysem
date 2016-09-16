@@ -11,38 +11,40 @@ class LSTM(RecursiveModel):
     """A recurrent network that uses LSTM cells in place of the usual hidden
     state representations.
     """
-    def __init__(self, dim, vocab, pretrained=False):
-        self.dim = dim
+    def __init__(self, input_dim, cell_dim, vocab, pretrained=False):
+        self.dim = input_dim
+        self.i_dim = input_dim
+        self.c_dim = cell_dim
         self.vocab = sorted(vocab)
 
         # initialize input gate weights
-        self.iW = self.random_weights(dim, dim)
-        self.iU = self.random_weights(dim, dim)
-        self.i_bias = 3 * np.zeros((self.dim, 1))
+        self.iW = self.random_weights(cell_dim, input_dim)
+        self.iU = self.random_weights(cell_dim, cell_dim)
+        self.i_bias = 1 * np.ones((cell_dim, 1))
 
         # initialize forget gate weights
-        self.fW = self.random_weights(dim, dim)
-        self.fU = self.random_weights(dim, dim)
-        self.f_bias = 3 * np.zeros((self.dim, 1))
+        self.fW = self.random_weights(cell_dim, input_dim)
+        self.fU = self.random_weights(cell_dim, cell_dim)
+        self.f_bias = 1 * np.ones((cell_dim, 1))
 
         # initialize output gate weights
-        self.oW = self.random_weights(dim, dim)
-        self.oU = self.random_weights(dim, dim)
-        self.o_bias = 3 * np.zeros((self.dim, 1))
+        self.oW = self.random_weights(cell_dim, input_dim)
+        self.oU = self.random_weights(cell_dim, cell_dim)
+        self.o_bias = 1 * np.ones((cell_dim, 1))
 
         # initialize cell input weights
-        self.uW = self.random_weights(dim, dim)
-        self.uU = self.random_weights(dim, dim)
-        self.u_bias = 0.1 * np.ones((self.dim, 1))
+        self.uW = self.random_weights(cell_dim, input_dim)
+        self.uU = self.random_weights(cell_dim, cell_dim)
+        self.u_bias = 0.0 * np.ones((cell_dim, 1))
 
-        self.yW = self.random_weights(dim, dim)
-        self.y_bias = 0.1 * np.ones(self.dim).reshape((self.dim, 1))
+        self.yW = self.random_weights(input_dim, cell_dim)
+        self.y_bias = 0.0 * np.ones((input_dim, 1))
         self.pretrained_vecs(pretrained) if pretrained else self.random_vecs()
 
     def compute_embeddings(self):
         '''Compute LSTM cell states for each item in the sequence.'''
-        self.hs[-1] = np.zeros((self.dim, self.bsize))
-        self.cell_states[-1] = np.zeros((self.dim, self.bsize))
+        self.hs[-1] = np.zeros((self.c_dim, self.bsize))
+        self.cell_states[-1] = np.zeros((self.c_dim, self.bsize))
 
         for i in range(self.seqlen):
             words = [sequence[i] for sequence in self.batch]
@@ -110,7 +112,7 @@ class LSTM(RecursiveModel):
         self.x_grads = defaultdict(flat_zeros(self.dim))
 
         h_grad = np.dot(self.yW.T, error_grad)
-        s_grad = np.zeros_like(error_grad)
+        s_grad = np.zeros_like(h_grad)
 
         # compute all gradients in reverse through the sequence
         for i in reversed(range(self.seqlen)):
@@ -140,7 +142,7 @@ class LSTM(RecursiveModel):
             self.dfU += np.dot(d_f_gate, self.hs[i-1].T)
             self.duU += np.dot(d_cell_input, self.hs[i-1].T)
 
-            dim = self.dim
+            dim = self.c_dim
             self.i_bias_grad += np.sum(d_i_gate, axis=1).reshape(dim, 1)
             self.f_bias_grad += np.sum(d_f_gate, axis=1).reshape(dim, 1)
             self.o_bias_grad += np.sum(d_o_gate, axis=1).reshape(dim, 1)
@@ -159,7 +161,8 @@ class LSTM(RecursiveModel):
                 if item != 'PAD':
                     try:
                         word = item.lower()
-                        self.x_grads[word] += dx[:, idx].reshape(self.dim, 1)
+                        grad = np.copy(dx[:, idx].reshape(self.dim, 1))
+                        self.x_grads[word] += grad
                     except KeyError:
                         pass
 
@@ -221,11 +224,12 @@ class LSTM(RecursiveModel):
 
     def to_array(self, words):
         '''Build input array from words in a given sequence position.'''
-        array = np.zeros((self.dim, self.bsize))
+        array = np.zeros((self.i_dim, self.bsize))
         for idx, word in enumerate(words):
             if word != 'PAD':
                 try:
-                    array[:, idx] = self.vectors[word.lower()].flatten()
+                    vector = np.copy(self.vectors[word.lower()].flatten())
+                    array[:, idx] = vector
                 except KeyError:
                     pass
         return array
@@ -265,10 +269,10 @@ class TreeLSTM(RecursiveModel):
         # initialize cell input weights
         self.uW = self.random_weights(cell_dim, input_dim)
         self.uU = self.random_weights(cell_dim, cell_dim)
-        self.u_bias = 0.2 * np.ones((cell_dim, 1))
+        self.u_bias = 0.1 * np.ones((cell_dim, 1))
 
         self.yW = self.random_weights(input_dim, cell_dim)
-        self.y_bias = 0.2 * np.ones((input_dim, 1))
+        self.y_bias = 0.1 * np.ones((input_dim, 1))
 
         self.pretrained_vecs(pretrained) if pretrained else self.random_vecs()
 

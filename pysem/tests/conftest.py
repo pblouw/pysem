@@ -79,7 +79,7 @@ def hnn(snli):
 
 @pytest.fixture(scope='module')
 def lstm(snli):
-    lstm = LSTM(dim=dim, vocab=snli.vocab)
+    lstm = LSTM(input_dim=dim, cell_dim=dim*2, vocab=snli.vocab)
     return lstm
 
 

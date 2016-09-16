@@ -36,6 +36,14 @@ def test_forward_pass(lstm, snli):
         assert isinstance(lstm.cell_states[i], np.ndarray)
         assert isinstance(lstm.hs[i], np.ndarray)
 
+        assert lstm.i_gates[0].shape == (lstm.c_dim, bsize)
+        assert lstm.f_gates[0].shape == (lstm.c_dim, bsize)
+        assert lstm.o_gates[0].shape == (lstm.c_dim, bsize)
+        assert lstm.cell_inputs[0].shape == (lstm.c_dim, bsize)
+        assert lstm.cell_states[0].shape == (lstm.c_dim, bsize)
+        assert lstm.hs[0].shape == (lstm.c_dim, bsize)
+        assert lstm.ys.shape == (lstm.i_dim, bsize)
+
 
 def test_gate_weight_gradients(lstm, snli, get_cost, num_grad, classifier):
     xs, ys = random_data(snli)
