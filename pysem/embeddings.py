@@ -252,7 +252,7 @@ class SyntaxEmbedding(RandomIndexing):
                 word = token.lower_
                 if word in readonly.vocab and token.pos_ == targpos:
                     for c in token.children:
-                         if c.dep_ in readonly.verb_deps:
+                        if c.dep_ in readonly.verb_deps:
                             role = readonly.verb_deps[c.dep_]
                             if c.lower_ in readonly.vocab:
                                 filler = readonly[c.lower_].v
