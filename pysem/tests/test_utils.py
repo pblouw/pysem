@@ -74,7 +74,6 @@ def test_hrr():
     unitary_unbind = (hrr_b * hrr_c) * ~hrr_b
     assert np.allclose(hrr_c.v, unitary_unbind.v)
 
-    assert hrr_c.norm_of_vector() != 1.0
     hrr_c.normalize()
     assert hrr_c.norm_of_vector() == 1.0
 
