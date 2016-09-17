@@ -31,6 +31,8 @@ def unitary_vector(dim):
 
 
 def get_convolution_matrix(hrr):
+    '''Produce a matrix that applies a linear transform equivalent to
+    convolution by the supplied hrr'''
     d = len(hrr)
     t = []
     for i in range(d):
@@ -41,7 +43,6 @@ def get_convolution_matrix(hrr):
 class HRR(object):
     """A holographic reduced representation, as defined by Plate (2003)."""
     def __init__(self, vector, unitary=False):
-        # self.v = self.normalize(vector)
         self.v = vector
         if unitary:
             self.make_unitary()
@@ -67,14 +68,14 @@ class HRR(object):
     def __invert__(self):
         return HRR(np.roll(self.v[::-1], 1))
 
-    def normalize(self, v):
-        if self.norm_of_vector(v) > 0:
-            return v / self.norm_of_vector(v)
+    def normalize(self):
+        if self.norm_of_vector() > 0:
+            self.v = self.v / self.norm_of_vector()
         else:
-            return np.zeros(len(v))
+            self.v = np.zeros_like(self.v)
 
-    def norm_of_vector(self, v):
-        return np.linalg.norm(v)
+    def norm_of_vector(self):
+        return np.linalg.norm(self.v)
 
     def convolve(self, other):
         v = np.fft.ifft(np.fft.fft(self.v) * np.fft.fft(other.v)).real
