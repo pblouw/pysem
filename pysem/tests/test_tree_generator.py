@@ -7,7 +7,7 @@ def test_tree_generator(tree_gen, dnn, snli):
     rate = 0.05
     n = 10
 
-    sample = random.choice(snli.data)
+    sample = random.choice(snli.train_data)
     s1 = sample.sentence1
     s2 = sample.sentence2
 

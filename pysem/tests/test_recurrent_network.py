@@ -9,7 +9,7 @@ rate = 0.001
 
 
 def random_data(snli):
-    samples = [random.choice(snli.data) for _ in range(bsize)]
+    samples = [random.choice(snli.train_data) for _ in range(bsize)]
     xs = [random.choice(sample) for sample in samples]
     ys = np.zeros((n_labels, bsize))
     ys[np.random.randint(0, n_labels, bsize), list(range(bsize))] = 1

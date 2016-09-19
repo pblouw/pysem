@@ -56,8 +56,7 @@ def wikipedia():
 def snli():
     snli = SNLI(snli_path)
     snli.build_vocab()
-    snli.extractor = snli.get_sentences
-    snli.data = [x for x in snli.dev_data]
+    snli.load_sentences()
     return snli
 
 

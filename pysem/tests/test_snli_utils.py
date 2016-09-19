@@ -9,8 +9,7 @@ dim = 25
 
 
 def test_bow_accuracy(snli):
-    snli.reset_streams()
-    snli.extractor = snli.get_xy_pairs
+    snli.load_xy_pairs()
     data = [pair for pair in snli.train_data if pair.label != '-']
 
     vectorizer = CountVectorizer(binary=True)
@@ -27,9 +26,7 @@ def test_bow_accuracy(snli):
 
 
 def test_rnn_accuracy(snli):
-    snli.reset_streams()
-    snli.extractor = snli.get_xy_pairs
-
+    snli.load_xy_pairs()
     encoder = RecurrentNetwork(dim=dim, vocab=snli.vocab)
     classifier = LogisticRegression(n_features=2*dim, n_labels=3)
     model = CompositeModel(snli, encoder, classifier)
@@ -42,9 +39,7 @@ def test_rnn_accuracy(snli):
 
 
 def test_dnn_accuracy(snli):
-    snli.reset_streams()
-    snli.extractor = snli.get_xy_pairs
-
+    snli.load_xy_pairs()
     encoder = DependencyNetwork(dim=dim, vocab=snli.vocab)
     classifier = LogisticRegression(n_features=2*dim, n_labels=3)
     model = CompositeModel(snli, encoder, classifier)

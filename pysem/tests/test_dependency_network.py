@@ -8,7 +8,7 @@ rate = 0.001
 
 
 def random_data(snli):
-    sample = random.choice(snli.data)
+    sample = random.choice(snli.train_data)
     xs = random.choice(sample)
     ys = np.zeros(n_labels)
     ys[np.random.randint(0, n_labels, 1)] = 1
@@ -24,7 +24,7 @@ def train_step(s_model, classifier, xs, ys):
 
 
 def test_token_wrapper(dnn, snli):
-    sample = random.choice(snli.data)
+    sample = random.choice(snli.train_data)
     sen = random.choice(sample)
     dnn.forward_pass(sen)
 
@@ -41,7 +41,7 @@ def test_token_wrapper(dnn, snli):
 
 
 def test_forward_pass(dnn, snli):
-    sample = random.choice(snli.data)
+    sample = random.choice(snli.train_data)
     sen = random.choice(sample)
     dnn.forward_pass(sen)
     sen_vec = dnn.get_root_embedding()
@@ -53,7 +53,7 @@ def test_forward_pass(dnn, snli):
 
 
 def test_backward_pass(dnn, snli):
-    sample = random.choice(snli.data)
+    sample = random.choice(snli.train_data)
     sen = random.choice(sample)
 
     error_grad = np.random.random((dnn.dim, 1)) * 2 * 0.5 - 0.5

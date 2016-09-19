@@ -7,7 +7,7 @@ rate = 0.001
 
 
 def random_data(snli):
-    sample = random.choice(snli.data)
+    sample = random.choice(snli.train_data)
     x = random.choice(sample)
     y = np.zeros((n_labels, 1))
     y[np.random.randint(0, n_labels, 1), 0] = 1
@@ -22,7 +22,7 @@ def train_step(s_model, classifier, xs, ys):
 
 
 def test_forward_pass(treeLSTM, snli):
-    sample = next(snli.train_data)
+    sample = random.choice(snli.train_data)
     sen = random.choice(sample)
 
     treeLSTM.forward_pass(sen)
@@ -43,7 +43,7 @@ def test_backward_pass(treeLSTM, snli):
     dim = 50
     eps = 0.5
 
-    sample = next(snli.train_data)
+    sample = random.choice(snli.train_data)
     sen = random.choice(sample)
 
     error_grad = np.random.random((dim, 1)) * 2 * eps - eps

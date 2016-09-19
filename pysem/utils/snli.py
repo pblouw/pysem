@@ -24,8 +24,7 @@ class CompositeModel(object):
     model for predicting inferential relationships on the SNLI dataset.
     '''
     def __init__(self, data, encoder, classifier):
-        data.reset_streams()
-        data.extractor = data.get_xy_pairs
+        data.load_xy_pairs()
 
         self.encoder = encoder
         self.classifier = classifier

@@ -2,7 +2,6 @@ import os
 import re
 import random
 import pytest
-import types
 import itertools
 
 import numpy as np
@@ -91,18 +90,13 @@ def test_wiki_article_limit(wikipedia):
     assert len(all_articles) == wikipedia.article_limit
 
 
-def test_snli_streaming(snli):
-    snli.reset_streams()
-    assert isinstance(snli.dev_data, types.GeneratorType)
-    assert isinstance(snli.test_data, types.GeneratorType)
-    assert isinstance(snli.train_data, types.GeneratorType)
+def test_snli_data(snli):
+    snli.load_raw()
 
-    assert isinstance(next(snli.dev_data), dict)
-    assert isinstance(next(snli.test_data), dict)
-    assert isinstance(next(snli.train_data), dict)
-
-    samples = [d for d in snli.dev_data]
-    assert len(samples) < 40
+    assert isinstance(snli.dev_data, list)
+    assert isinstance(snli.test_data, list)
+    assert isinstance(snli.train_data, list)
+    assert len(snli.dev_data) < 40
 
 
 def test_snli_vocab_build(snli):
@@ -114,34 +108,31 @@ def test_snli_vocab_build(snli):
 
 
 def test_snli_extractors(snli):
-    snli.reset_streams()
-    snli.extractor = snli.get_xy_pairs
-
-    xy_pair = next(snli.dev_data)
+    snli.load_xy_pairs()
+    xy_pair = random.choice(snli.test_data)
 
     assert isinstance(xy_pair, tuple)
     assert isinstance(random.choice(xy_pair), str)
 
-    snli.extractor = snli.get_sentences
-    sentences = next(snli.dev_data)
+    snli.load_sentences()
+    sen_pair = random.choice(snli.test_data)
 
-    assert isinstance(sentences, tuple)
-    assert isinstance(random.choice(sentences), str)
+    assert isinstance(sen_pair, tuple)
+    assert isinstance(random.choice(sen_pair), str)
 
-    snli.extractor = snli.get_text
-    test_text = snli.test_data
+    snli.load_text()
 
-    assert isinstance(test_text, str)
+    assert isinstance(snli.test_data, str)
 
-    snli.extractor = snli.get_parses
-    parses = next(snli.train_data)
+    snli.load_parses()
+    parse_pair = random.choice(snli.test_data)
 
-    assert isinstance(parses, tuple)
+    assert isinstance(parse_pair, tuple)
 
-    snli.extractor = snli.get_binary_parses
-    parses = next(snli.train_data)
+    snli.load_binary_parses()
+    parse_pair = random.choice(snli.test_data)
 
-    assert isinstance(parses, tuple)
+    assert isinstance(parse_pair, tuple)
 
 
 def test_snli_binarizer():

@@ -7,7 +7,7 @@ rate = 0.001
 
 
 def random_data(snli):
-    sample = random.choice(snli.data)
+    sample = random.choice(snli.train_data)
     xs = random.choice(sample)
     ys = np.zeros(n_labels)
     ys[np.random.randint(0, n_labels, 1)] = 1
@@ -23,7 +23,7 @@ def train_step(s_model, classifier, xs, ys):
 
 
 def test_forward_pass(hnn, snli):
-    sample = next(snli.train_data)
+    sample = random.choice(snli.train_data)
     sen = random.choice(sample)
 
     hnn.forward_pass(sen)
@@ -34,7 +34,7 @@ def test_forward_pass(hnn, snli):
 
 
 def test_backward_pass(hnn, snli):
-    sample = random.choice(snli.data)
+    sample = random.choice(snli.train_data)
     sen = random.choice(sample)
 
     error_grad = np.random.random((hnn.dim, 1)) * 2 * 0.1 - 0.1

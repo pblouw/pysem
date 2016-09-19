@@ -176,7 +176,7 @@ class SNLI(DataHandler):
     """
     def __init__(self, path):
         self.path = path
-        self.reset_streams()
+        self.load_raw()
 
     @property
     def dev_data(self):
@@ -202,15 +202,6 @@ class SNLI(DataHandler):
     def train_data(self, dummy):
         raise Exception('SNLI train data is readonly and cannot be modified')
 
-    @property
-    def extractor(self):
-        return self._extractor
-
-    @extractor.setter
-    def extractor(self, func):
-        self.reset_streams(func=func)
-        self._extractor = func
-
     @staticmethod
     def binarize(labels):
         '''Turn a list of snli labels into a binary array to use in models'''
@@ -223,68 +214,104 @@ class SNLI(DataHandler):
         return array
 
     @staticmethod
-    def get_parses(stream):
-        '''Modifies datastream to yield parses of sentence pairs'''
-        for item in stream:
-            yield Parses(item['sentence1_parse'], item['sentence2_parse'])
+    def parse_filter(datalist):
+        filtered = []
+        for item in datalist:
+            datum = Parses(item['sentence1_parse'], item['sentence2_parse'])
+            filtered.append(datum)
+
+        return filtered
 
     @staticmethod
-    def get_binary_parses(stream):
-        '''Modifies datastream to yield binary parses of sentence pairs'''
-        for item in stream:
+    def binary_parse_filter(datalist):
+        filtered = []
+        for item in datalist:
             p1 = item['sentence1_binary_parse']
             p2 = item['sentence2_binary_parse']
-            yield BinaryParses(p1, p2)
+            filtered.append(BinaryParses(p1, p2))
+
+        return filtered
 
     @staticmethod
-    def get_text(stream):
+    def sentence_filter(datalist):
+        filtered = []
+        for item in datalist:
+            filtered.append(Sentences(item['sentence1'], item['sentence2']))
+
+        return filtered
+
+    @staticmethod
+    def text_filter(datalist):
         '''Uses datastream to extract and return all text in the stream'''
         acc = []
-        for item in stream:
+        for item in datalist:
             pair = item['sentence1'] + ' ' + item['sentence2']
             acc.append(pair.lower())
         return ' '.join(acc)
 
     @staticmethod
-    def get_sentences(stream):
-        '''Modifies datastream to yield sentence pairs'''
-        for item in stream:
-            yield Sentences(item['sentence1'], item['sentence2'])
-
-    @staticmethod
-    def get_xy_pairs(stream):
-        '''Modifies datastream to yield x,y pairs for model training'''
-        for item in stream:
+    def xy_filter(datalist):
+        filtered = []
+        for item in datalist:
             s1 = item['sentence1']
             s2 = item['sentence2']
-            yield TrainingPair(s1, s2, item['gold_label'])
+            filtered.append(TrainingPair(s1, s2, item['gold_label']))
+
+        return filtered
+
+    def load(self, filename):
+        '''Returns a list of data items stored in named SNLI json file.'''
+        data = []
+        with open(self.path + filename) as f:
+            for line in f:
+                data.append(json.loads(line))
+
+        return data
+
+    def load_raw(self):
+        self._train_data = self.load('snli_1.0_train.jsonl')
+        self._dev_data = self.load('snli_1.0_dev.jsonl')
+        self._test_data = self.load('snli_1.0_test.jsonl')
+
+    def load_parses(self):
+        '''Loads train/dev/test parse tree data for each item in SNLI'''
+        self.load_raw()
+        self._train_data = self.parse_filter(self._train_data)
+        self._dev_data = self.parse_filter(self._dev_data)
+        self._test_data = self.parse_filter(self._test_data)
+
+    def load_binary_parses(self):
+        '''Loads train/dev/test binary parse tree data for items in SNLI'''
+        self.load_raw()
+        self._train_data = self.binary_parse_filter(self._train_data)
+        self._dev_data = self.binary_parse_filter(self._dev_data)
+        self._test_data = self.binary_parse_filter(self._test_data)
+
+    def load_sentences(self):
+        '''Loads train/dev/test sentence data for each item in SNLI'''
+        self.load_raw()
+        self._train_data = self.sentence_filter(self._train_data)
+        self._dev_data = self.sentence_filter(self._dev_data)
+        self._test_data = self.sentence_filter(self._test_data)
+
+    def load_xy_pairs(self):
+        '''Loads train/dev/test sentences-label data for items in SNLI'''
+        self.load_raw()
+        self._train_data = self.xy_filter(self._train_data)
+        self._dev_data = self.xy_filter(self._dev_data)
+        self._test_data = self.xy_filter(self._test_data)
+
+    def load_text(self):
+        self.load_raw()
+        self._train_data = self.text_filter(self._train_data)
+        self._dev_data = self.text_filter(self._dev_data)
+        self._test_data = self.text_filter(self._test_data)
 
     def build_vocab(self):
         '''Extract and build a vocab from all text in the corpus'''
-        self.extractor = self.get_text
+        self.load_text()
         text = self.train_data + self.dev_data + self.test_data
         self.vocab = sorted(list(set(nltk.word_tokenize(text))))
-        self.reset_streams()
-
-    def reset_streams(self, func=lambda x: x):
-        '''Reset all generators that stream data from the SNLI dump'''
-        self._train_data = func(self._train_stream())
-        self._dev_data = func(self._dev_stream())
-        self._test_data = func(self._test_stream())
-
-    def _stream(self, filename):
-        with open(self.path + filename) as f:
-            for line in f:
-                yield json.loads(line)
-
-    def _train_stream(self):
-        return self._stream('snli_1.0_train.jsonl')
-
-    def _dev_stream(self):
-        return self._stream('snli_1.0_dev.jsonl')
-
-    def _test_stream(self):
-        return self._stream('snli_1.0_test.jsonl')
 
 
 class SICK(DataHandler):

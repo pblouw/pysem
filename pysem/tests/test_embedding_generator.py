@@ -20,7 +20,7 @@ def num_grad(params, idx, embgen, dnn, s2):
 
 
 def test_forward_pass(embgen, dnn, snli):
-    sample = random.choice(snli.data)
+    sample = random.choice(snli.train_data)
     s1 = sample.sentence1
     s2 = sample.sentence2
 
@@ -35,7 +35,7 @@ def test_forward_pass(embgen, dnn, snli):
 
 
 def test_backward_pass(embgen, dnn, snli):
-    sample = random.choice(snli.data)
+    sample = random.choice(snli.train_data)
     s1 = sample.sentence1
     s2 = sample.sentence2
 
@@ -50,7 +50,7 @@ def test_backward_pass(embgen, dnn, snli):
 
 
 def test_dep_weight_gradients(embgen, dnn, snli):
-    sample = random.choice(snli.data)
+    sample = random.choice(snli.train_data)
     s1 = sample.sentence1
     s2 = sample.sentence2
 
@@ -77,7 +77,7 @@ def test_dep_weight_gradients(embgen, dnn, snli):
 
 
 def test_word_weight_gradients(embgen, dnn, snli):
-    sample = random.choice(snli.data)
+    sample = random.choice(snli.train_data)
     s1 = sample.sentence1
     s2 = sample.sentence2
 
