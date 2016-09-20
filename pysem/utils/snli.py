@@ -9,16 +9,6 @@ from itertools import islice
 from copy import deepcopy
 
 
-def average(array, acc, span):
-    for _ in range(round(len(array) / span) + 1):
-        denom = len(array[:span])
-        if denom > 0:
-            val = sum(array[:span]) / span
-            acc.append(val)
-            array = array[span:]
-    return acc
-
-
 class CompositeModel(object):
     '''Combines a sentence encoder with a classifier to create a complete
     model for predicting inferential relationships on the SNLI dataset.
@@ -28,40 +18,49 @@ class CompositeModel(object):
 
         self.encoder = encoder
         self.classifier = classifier
+        self.acc = []
 
         self.train_data = [d for d in data.train_data if d.label != '-']
         self.dev_data = [d for d in data.dev_data if d.label != '-']
         self.test_data = [d for d in data.test_data if d.label != '-']
 
-        if isinstance(self.encoder, RecurrentNetwork):
-            self.acc = [self.rnn_accuracy()]
-        if isinstance(self.encoder, DependencyNetwork):
-            self.acc = [self.dnn_accuracy()]
+    @staticmethod
+    def average(array, acc, span):
+        for _ in range(round(len(array) / span) + 1):
+            denom = len(array[:span])
+            if denom > 0:
+                val = sum(array[:span]) / span
+                acc.append(val)
+                array = array[span:]
+        return acc
 
     def train(self, iters, bsize, rate=0.01, log_interval=1000, schedule=1000):
         '''Train the model for the specified number of iterations.'''
         self.iters = iters
         self.bsize = bsize
         self.rate = rate
-        self.acc_interval = log_interval
-        self.anneal_schedule = schedule
+        self.log_interval = log_interval
+        self.schedule = schedule
 
         if isinstance(self.encoder, RecurrentNetwork):
+            self.acc.append(self.rnn_accuracy(self.dev_data))
             self._train_recurrent_model()
+
         if isinstance(self.encoder, DependencyNetwork):
+            self.acc.append(self.dnn_accuracy(self.dev_data))
             self._train_recursive_model()
 
     def _log_status(self, n):
         '''Keep track of training progress to log accuracy, print status.'''
-        if n % self.anneal_schedule == 0 and n != 0:
+        if n % self.schedule == 0 and n != 0:
             self.rate = self.rate / 2.0
             print('Learning rate annealed to ', self.rate)
 
-        if n % self.acc_interval == 0 and n != 0:
+        if n % self.log_interval == 0 and n != 0:
             if isinstance(self.encoder, RecurrentNetwork):
-                self.acc.append(self.rnn_accuracy())
+                self.acc.append(self.rnn_accuracy(self.dev_data))
             if isinstance(self.encoder, DependencyNetwork):
-                self.acc.append(self.dnn_accuracy())
+                self.acc.append(self.dnn_accuracy(self.dev_data))
 
     def _train_recurrent_model(self):
         '''Adapt training regime to accomodate recurrent encoder structure.'''
@@ -76,7 +75,7 @@ class CompositeModel(object):
             self.rnn_encoder_update()
             self._log_status(n)
 
-        self.acc.append(self.rnn_accuracy())
+        self.acc.append(self.rnn_accuracy(self.dev_data))
 
     def _train_recursive_model(self):
         '''Adapt training regime to accomodate recursive encoder structure.'''
@@ -99,7 +98,7 @@ class CompositeModel(object):
             self.dnn_encoder_update()
             self._log_status(n)
 
-        self.acc.append(self.dnn_accuracy())
+        self.acc.append(self.dnn_accuracy(self.dev_data))
 
     def training_iteration(self, s1, s2, ys):
         '''Use input sentences to compute weight updates on encoder.'''
@@ -153,10 +152,7 @@ class CompositeModel(object):
                 s2_vec = np.copy(self.encoder_copy.vectors[word])
                 self.encoder.vectors[word] = (s1_vec + s2_vec) / 2.
 
-    def dnn_accuracy(self, data=None):
-        if not data:
-            data = self.dev_data
-
+    def dnn_accuracy(self, data):
         count = 0
         label_dict = {0: 'entailment', 1: 'neutral', 2: 'contradiction'}
 
@@ -178,10 +174,8 @@ class CompositeModel(object):
 
         return count / len(data)
 
-    def rnn_accuracy(self, data=None):
-        if not data:
-            data = (x for x in self.dev_data)
-
+    def rnn_accuracy(self, data):
+        data = (x for x in data)
         n_correct = 0
         n_total = 0
 
@@ -213,10 +207,10 @@ class CompositeModel(object):
 
     def plot(self, noshow=False):
         if isinstance(self.encoder, DependencyNetwork):
-            averaged_costs = average(self.classifier.costs, [], self.bsize)
-            self.classifier.costs = averaged_costs
+            avg_costs = self.average(self.classifier.costs, [], self.bsize)
+            self.classifier.costs = avg_costs
 
-        intr = self.acc_interval
+        intr = self.log_interval
         xlen = len(self.classifier.costs)
 
         fig, ax1 = plt.subplots(figsize=(10, 6))

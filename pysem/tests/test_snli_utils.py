@@ -1,14 +1,12 @@
 import numpy as np
 
-from pysem.networks import RecurrentNetwork, DependencyNetwork
 from pysem.utils.ml import LogisticRegression
-from pysem.utils.snli import CompositeModel, bow_accuracy, average
+from pysem.utils.snli import CompositeModel, bow_accuracy
 from sklearn.feature_extraction.text import CountVectorizer
-
-dim = 25
 
 
 def test_bow_accuracy(snli):
+    dim = 50
     snli.load_xy_pairs()
     data = [pair for pair in snli.train_data if pair.label != '-']
 
@@ -25,12 +23,10 @@ def test_bow_accuracy(snli):
     assert 0 < acc < 0.65
 
 
-def test_rnn_accuracy(snli):
-    snli.load_xy_pairs()
-    encoder = RecurrentNetwork(dim=dim, vocab=snli.vocab)
-    classifier = LogisticRegression(n_features=2*dim, n_labels=3)
-    model = CompositeModel(snli, encoder, classifier)
-    model.acc.append(model.rnn_accuracy())
+def test_rnn_accuracy(snli, rnn):
+    classifier = LogisticRegression(n_features=2*rnn.dim, n_labels=3)
+    model = CompositeModel(snli, rnn, classifier)
+    model.acc.append(model.rnn_accuracy(model.dev_data))
 
     assert 0 < model.acc[0] < 0.65
 
@@ -38,12 +34,10 @@ def test_rnn_accuracy(snli):
     assert len(model.acc) == 3
 
 
-def test_dnn_accuracy(snli):
-    snli.load_xy_pairs()
-    encoder = DependencyNetwork(dim=dim, vocab=snli.vocab)
-    classifier = LogisticRegression(n_features=2*dim, n_labels=3)
-    model = CompositeModel(snli, encoder, classifier)
-    model.acc.append(model.dnn_accuracy())
+def test_dnn_accuracy(snli, dnn):
+    classifier = LogisticRegression(n_features=2*dnn.dim, n_labels=3)
+    model = CompositeModel(snli, dnn, classifier)
+    model.acc.append(model.dnn_accuracy(model.dev_data))
 
     assert 0 < model.acc[0] < 0.65
 
@@ -51,6 +45,6 @@ def test_dnn_accuracy(snli):
     assert len(model.acc) == 3
 
 
-def test_average():
+def test_average(snli):
     array = list(range(100))
-    assert len(average(array, [], 10)) == 10
+    assert len(CompositeModel.average(array, [], 10)) == 10
