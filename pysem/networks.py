@@ -1,6 +1,5 @@
 import pickle
 import spacy
-import nltk
 
 import numpy as np
 
@@ -202,7 +201,7 @@ class RecurrentNetwork(RecursiveModel):
 
     def forward_pass(self, batch):
         '''Convert input sentences into sequence and compute hidden states.'''
-        self.batch = [nltk.word_tokenize(sen) for sen in batch]
+        self.batch = [[n.lower_ for n in self.parser(sen)] for sen in batch]
         self.bsize = len(batch)
         self.seqlen = max([len(s) for s in self.batch])
 

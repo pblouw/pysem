@@ -1,4 +1,3 @@
-import nltk
 import numpy as np
 
 from collections import defaultdict
@@ -129,7 +128,7 @@ class LSTM(RecursiveModel):
 
     def forward_pass(self, batch):
         '''Convert input sentences into sequence and compute cell states.'''
-        self.batch = [nltk.word_tokenize(sen) for sen in batch]
+        self.batch = [[n.lower_ for n in self.parser(sen)] for sen in batch]
         self.bsize = len(batch)
         self.seqlen = max([len(s) for s in self.batch])
 
