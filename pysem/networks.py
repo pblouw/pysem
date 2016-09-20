@@ -86,9 +86,9 @@ class RecursiveModel(object):
 
     @staticmethod
     def random_weights(d1, d2):
-        '''Returns matrix of values sampled uniformly from eps interval.'''
-        eps = 1.0 / np.sqrt((d1 + d2) / 2)
-        weights = np.random.random((d1, d2)) * 2 * eps - eps
+        '''Returns matrix of values sampled uniformly using Glorot init.'''
+        eps = np.sqrt(6.0 / (d2 + d1))
+        weights = np.random.uniform(-eps, eps, size=(d1, d2))
         return weights
 
     @staticmethod

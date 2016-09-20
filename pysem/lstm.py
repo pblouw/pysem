@@ -77,27 +77,27 @@ class LSTM(RecursiveModel):
         self.vocab = sorted(vocab)
 
         # initialize input gate weights
-        self.iW = self.random_weights(cell_dim, input_dim)
-        self.iU = self.random_weights(cell_dim, cell_dim)
+        self.iW = 4 * self.random_weights(cell_dim, input_dim)
+        self.iU = 4 * self.random_weights(cell_dim, cell_dim)
         self.i_bias = 1 * np.ones((cell_dim, 1))
 
         # initialize forget gate weights
-        self.fW = self.random_weights(cell_dim, input_dim)
-        self.fU = self.random_weights(cell_dim, cell_dim)
+        self.fW = 4 * self.random_weights(cell_dim, input_dim)
+        self.fU = 4 * self.random_weights(cell_dim, cell_dim)
         self.f_bias = 1 * np.ones((cell_dim, 1))
 
         # initialize output gate weights
-        self.oW = self.random_weights(cell_dim, input_dim)
-        self.oU = self.random_weights(cell_dim, cell_dim)
+        self.oW = 4 * self.random_weights(cell_dim, input_dim)
+        self.oU = 4 * self.random_weights(cell_dim, cell_dim)
         self.o_bias = 1 * np.ones((cell_dim, 1))
 
         # initialize cell input weights
         self.uW = self.random_weights(cell_dim, input_dim)
         self.uU = self.random_weights(cell_dim, cell_dim)
-        self.u_bias = 0.1 * np.ones((cell_dim, 1))
+        self.u_bias = np.zeros((cell_dim, 1))
 
         self.yW = self.random_weights(input_dim, cell_dim)
-        self.y_bias = 0.1 * np.ones((input_dim, 1))
+        self.y_bias = np.zeros((input_dim, 1))
         self.pretrained_vecs(pretrained) if pretrained else self.random_vecs()
 
     def compute_embeddings(self):
