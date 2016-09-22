@@ -8,17 +8,16 @@ from sklearn.feature_extraction.text import CountVectorizer
 def test_bow_accuracy(snli):
     dim = 50
     snli.load_xy_pairs()
-    data = [pair for pair in snli.train_data if pair.label != '-']
 
     vectorizer = CountVectorizer(binary=True)
     vectorizer.fit(snli.vocab)
 
     scale = 1 / np.sqrt(dim)
     size = (dim, len(vectorizer.get_feature_names()))
-    bow_embedding_matrix = np.random.normal(loc=0, scale=scale, size=size)
-    bow_classifier = LogisticRegression(n_features=2*dim, n_labels=3)
+    emb_matrix = np.random.normal(loc=0, scale=scale, size=size)
+    classifier = LogisticRegression(n_features=2*dim, n_labels=3)
 
-    acc = bow_accuracy(data, bow_classifier, bow_embedding_matrix, vectorizer)
+    acc = bow_accuracy(snli.train_data, classifier, emb_matrix, vectorizer)
 
     assert 0 < acc < 0.65
 
