@@ -38,13 +38,13 @@ def test_backward_pass(rnn, snli):
     rnn.forward_pass(xs)
 
     # Save a copy of the weights before SGD update
-    weights = np.copy(rnn.whh)
+    weights = np.copy(rnn.params['Whh'])
 
     # Do backprop
     rnn.backward_pass(error_grad, rate=rate)
 
     # Save a copy of the weights after SGD update
-    new_weights = np.copy(rnn.whh)
+    new_weights = np.copy(rnn.params['Why'])
 
     # Check that every weight has changed across the update
     assert np.count_nonzero(weights - new_weights) == weights.size
@@ -55,8 +55,8 @@ def test_weight_gradients(rnn, snli, get_cost, num_grad, classifier):
 
     # Use random weight in each matrix for n numerical gradient checks
     for _ in range(n_gradient_checks):
-        idx = np.random.randint(0, rnn.whh.size, size=1)
-        params = rnn.whh.flat
+        idx = np.random.randint(0, rnn.params['Whh'].size, size=1)
+        params = rnn.params['Whh'].flat
 
         numerical_grad = num_grad(rnn, params, idx, xs, ys, classifier)
         train_step(rnn, classifier, xs, ys)
@@ -64,8 +64,8 @@ def test_weight_gradients(rnn, snli, get_cost, num_grad, classifier):
 
         assert np.allclose(analytic_grad, numerical_grad)
 
-        idx = np.random.randint(0, rnn.why.size, size=1)
-        params = rnn.why.flat
+        idx = np.random.randint(0, rnn.params['Why'].size, size=1)
+        params = rnn.params['Why'].flat
 
         numerical_grad = num_grad(rnn, params, idx, xs, ys, classifier)
         train_step(rnn, classifier, xs, ys)
@@ -100,8 +100,8 @@ def test_bias_gradients(rnn, snli, get_cost, num_grad, classifier):
 
     # Use random element in each bias vector for n numerical gradient checks
     for _ in range(n_gradient_checks):
-        idx = np.random.randint(0, rnn.bh.size, size=1)
-        params = rnn.bh.flat
+        idx = np.random.randint(0, rnn.params['bh'].size, size=1)
+        params = rnn.params['bh'].flat
 
         numerical_grad = num_grad(rnn, params, idx, xs, ys, classifier)
         train_step(rnn, classifier, xs, ys)
@@ -110,8 +110,8 @@ def test_bias_gradients(rnn, snli, get_cost, num_grad, classifier):
         if not rnn.clipflag:
             assert np.allclose(analytic_grad, numerical_grad)
 
-        idx = np.random.randint(0, rnn.by.size, size=1)
-        params = rnn.by.flat
+        idx = np.random.randint(0, rnn.params['by'].size, size=1)
+        params = rnn.params['by'].flat
 
         numerical_grad = num_grad(rnn, params, idx, xs, ys, classifier)
         train_step(rnn, classifier, xs, ys)

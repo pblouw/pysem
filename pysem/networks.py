@@ -158,12 +158,14 @@ class RecurrentNetwork(RecursiveModel):
         self.vocab = vocab
         self.clipflag = None
 
-        self.whh = self.gaussian_id(dim)
-        self.why = self.gaussian_id(dim)
-
         self.xs, self.hs = {}, {}
-        self.bh = np.zeros((dim, 1))
-        self.by = np.zeros((dim, 1))
+        self.params, self.gradients = {}, {}
+
+        for w in ['Whh', 'Why']:
+            self.params[w] = self.gaussian_id(dim)
+
+        for b in ['bh', 'by']:
+            self.params[b] = np.zeros((dim, 1))
 
         self.pretrained_vecs(pretrained) if pretrained else self.random_vecs()
 
@@ -194,10 +196,12 @@ class RecurrentNetwork(RecursiveModel):
         for i in range(self.seqlen):
             words = [sequence[i] for sequence in self.batch]
             self.xs[i] = words
-            self.hs[i] = np.dot(self.whh, self.hs[i-1]) + self.to_array(words)
-            self.hs[i] = np.tanh(self.hs[i] + self.bh)
+            self.hs[i] = np.dot(self.params['Whh'], self.hs[i-1])
+            self.hs[i] += self.to_array(words)
+            self.hs[i] = np.tanh(self.hs[i] + self.params['bh'])
 
-        self.ys = np.tanh(np.dot(self.why, self.hs[i]) + self.by)
+        self.ys = np.dot(self.params['Why'], self.hs[i]) + self.params['by']
+        self.ys = np.tanh(self.ys)
 
     def forward_pass(self, batch):
         '''Convert input sentences into sequence and compute hidden states.'''
@@ -217,19 +221,19 @@ class RecurrentNetwork(RecursiveModel):
         error_grad = error_grad * self.tanh_grad(self.get_root_embedding())
         self.xgrads = defaultdict(flat_zeros(self.dim))
 
-        dwhh = np.zeros_like(self.whh)
-        dbh = np.zeros_like(self.bh)
+        dwhh = np.zeros_like(self.params['Whh'])
+        dbh = np.zeros_like(self.params['bh'])
 
         dwhy = np.dot(error_grad, self.hs[self.seqlen-1].T)
         dby = np.sum(error_grad, axis=1).reshape(self.dim, 1)
 
         dh_next = np.zeros_like(self.hs[0])
-        dh = np.dot(self.why.T, error_grad)
+        dh = np.dot(self.params['Why'].T, error_grad)
         dh = dh * self.tanh_grad(self.hs[self.seqlen-1])
 
         for i in reversed(range(self.seqlen)):
             if i < self.seqlen - 1:
-                dh = np.dot(self.whh.T, dh_next)
+                dh = np.dot(self.params['Whh'].T, dh_next)
                 dh = dh * self.tanh_grad(self.hs[i])
 
             dwhh += np.dot(dh_next, self.hs[i].T)
@@ -250,10 +254,10 @@ class RecurrentNetwork(RecursiveModel):
         self.dby = self.clip_gradient(dby / self.bsize)
         self.xgrads = {w: g / self.bsize for w, g in self.xgrads.items()}
 
-        self.why -= rate * self.dwhy
-        self.whh -= rate * self.dwhh
-        self.bh -= rate * self.dbh
-        self.by -= rate * self.dby
+        self.params['Why'] -= rate * self.dwhy
+        self.params['Whh'] -= rate * self.dwhh
+        self.params['bh'] -= rate * self.dbh
+        self.params['by'] -= rate * self.dby
 
         word_set = [w.lower() for w in set(flatten(self.batch)) if w != 'PAD']
         all_words = [w.lower() for w in flatten(self.batch) if w != 'PAD']
