@@ -75,7 +75,7 @@ def test_hrr():
     assert np.allclose(hrr_c.v, unitary_unbind.v)
 
     hrr_c.normalize()
-    assert hrr_c.norm_of_vector() == 1.0
+    assert np.allclose(hrr_c.norm_of_vector(), 1.0)
 
     with pytest.raises(Exception):
         hrr_a * 5

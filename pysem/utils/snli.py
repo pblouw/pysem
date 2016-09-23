@@ -120,10 +120,9 @@ class CompositeModel(object):
     def rnn_encoder_update(self):
         '''Update an RNN encoder based on the current training iteration by
         averaging the weights of the encoder and its copy.'''
-        self.encoder.whh = (self.encoder.whh + self.encoder_copy.whh) / 2.
-        self.encoder.why = (self.encoder.why + self.encoder_copy.why) / 2.
-        self.encoder.bh = (self.encoder.bh + self.encoder_copy.bh) / 2.
-        self.encoder.by = (self.encoder.by + self.encoder_copy.by) / 2.
+        for p in self.encoder.params:
+            avg = (self.encoder.params[p] + self.encoder_copy.params[p]) / 2.0
+            self.encoder.params[p] = avg
 
         word_set = set(flatten(self.encoder.batch + self.encoder_copy.batch))
         word_set = [w.lower() for w in word_set if w != 'PAD']
