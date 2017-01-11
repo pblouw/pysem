@@ -47,7 +47,7 @@ In the examples directory, there are Jupyter notebooks illustrating the creation
 * generative models for generating sentences that are entailed by a given 
   sentence. 
 
-Note that to you will need to download a dump of wikipedia articles and preprocess them using [this tool](https://github.com/attardi/wikiextractor). You will also add need to change the path in the notebook to point to where you have saved this dump locally.
+Note that to you will need to download a dump of wikipedia articles and preprocess them using `this tool <https://github.com/attardi/wikiextractor>`_. You will also need to change the path in the notebook to point to where you have saved this dump locally.
 
 Installation
 -------------
