@@ -9,8 +9,9 @@ from pysem.generatives import EmbeddingGenerator, TreeGenerator
 from pysem.utils.ml import LogisticRegression
 from pysem.lstm import LSTM, TreeLSTM
 
-wiki_path = os.getcwd() + '/pysem/tests/corpora/wikipedia/'
-snli_path = os.getcwd() + '/pysem/tests/corpora/snli/'
+wiki_path = os.path.join(os.path.dirname(__file__), 'corpora', 'wikipedia/')
+snli_path = os.path.join(os.path.dirname(__file__), 'corpora', 'snli/')
+
 dim = 50
 n_labels = 3
 

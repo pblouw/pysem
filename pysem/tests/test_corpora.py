@@ -9,7 +9,8 @@ import numpy as np
 from pysem.corpora import Wikipedia, SNLI, SICK
 from pysem.utils.multiprocessing import max_strip
 
-sick_path = os.getcwd() + '/pysem/tests/corpora/sick/sicktest.txt'
+sick_path = os.path.join(os.path.dirname(__file__), 'corpora', 'sick',
+                         'sicktest.txt')
 
 
 def test_wiki_streaming(wikipedia):
