@@ -51,15 +51,22 @@ In the examples directory, there are Jupyter notebooks illustrating the creation
 Installation
 -------------
 
-Pysem requires Python 3, mostly to support effective multiprocessing. To install other requirements and library itself, do the following:
+Pysem requires Python 3.5, mostly to support effective multiprocessing. For installation, it is easist to use the Anaconda Python distribution to create a conda environment as follows:
 
 .. code:: shell
 
-  pip install -r requirements.txt
-  python setup.py develop --user
+  conda env create
+  source activate pysem
+  python -m spacy.en.download
+  python -m nltk.downloader stopwords punkt
+  python setup.py develop
 
 
-The --user flag can be omitted if you are using virtualenv or something equivalent. 
+The first command creates the environment, while the second command activates it. The next commands download data for doing parsing and tokenizing. The final command install this library in the environment. You can verify that the installation was successful with the following command:
+
+.. code:: shell
+
+  py.test
 
 
 Testing:
