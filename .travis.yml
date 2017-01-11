@@ -16,7 +16,7 @@ script:
   - python -m spacy.en.download
   - python setup.py install
   - flake8 pysem
-  - coverage combine
+  - coverage combine --append
   - py.test --cov=./
 
 after_success:
