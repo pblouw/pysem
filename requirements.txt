@@ -4,7 +4,7 @@ nltk
 flake8
 numpy
 scipy
-spacy
+spacy==0.100.6
 pytest-cov
 scikit-learn
 matplotlib
