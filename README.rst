@@ -52,7 +52,7 @@ Note that to you will need to download a dump of wikipedia articles and preproce
 Installation
 -------------
 
-Pysem requires Python 3.5, mostly to support effective multiprocessing. For installation, it is easist to use the Anaconda Python distribution to create a conda environment as follows:
+Pysem requires Python 3.5, mostly to support effective multiprocessing. For installation, it is easist to use the `Anaconda <https://www.continuum.io/downloads>` Python distribution to create a conda environment as follows. Run these commands from inside the cloned repository:
 
 .. code:: shell
 
@@ -63,11 +63,18 @@ Pysem requires Python 3.5, mostly to support effective multiprocessing. For inst
   python setup.py develop
 
 
-The first command creates the environment, while the second command activates it. The next commands download data for doing parsing and tokenizing. The final command install this library in the environment. You can verify that the installation was successful with the following command:
+The first command creates an environment called `pysem` that includes all the needed dependencies, while the second command activates it. The next commands download data for doing parsing and tokenizing. The final command install this library in the environment. You can verify that the installation was successful with the following command:
 
 .. code:: shell
 
   py.test
+
+To leave the environment and (optionally) delete it, do the following:
+
+.. code:: shell
+
+  source deactivate
+  conda env remove -n pysem
 
 
 Testing:
