@@ -110,7 +110,7 @@ def test_embedding_gradients(dnn, snli, get_cost, num_grad, classifier):
     xs, ys = random_data(snli)
 
     dnn.forward_pass(xs)
-    words = [node.lower_ for node in dnn.tree]
+    words = [node.text for node in dnn.tree]
     words = [w for w in words if w in snli.vocab]
 
     for _ in range(n_gradient_checks):

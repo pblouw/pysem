@@ -205,7 +205,7 @@ class RecurrentNetwork(RecursiveModel):
 
     def forward_pass(self, batch):
         '''Convert input sentences into sequence and compute hidden states.'''
-        self.batch = [[n.lower_ for n in self.parser(sen)] for sen in batch]
+        self.batch = [[n.text for n in self.parser(sen)] for sen in batch]
         self.bsize = len(batch)
         self.seqlen = max([len(s) for s in self.batch])
 
@@ -387,7 +387,7 @@ class DependencyNetwork(RecursiveModel):
         vector for the word corresponding to the leaf node is used as the
         embedding.'''
         try:
-            emb = np.dot(self.wm, np.copy(self.vectors[node.lower_]))
+            emb = np.dot(self.wm, np.copy(self.vectors[node.text]))
         except KeyError:
             emb = np.zeros(self.dim).reshape((self.dim, 1))
 
@@ -402,8 +402,8 @@ class DependencyNetwork(RecursiveModel):
         '''Use node gradients to update the word embeddings at each node.'''
         for node in self.tree:
             try:
-                word = node.lower_
-                count = sum([1 for x in self.tree if x.lower_ == word])
+                word = node.text
+                count = sum([1 for x in self.tree if x.text == word])
                 self.vectors[word] -= self.rate * self.xgrads[word] / count
             except KeyError:
                 pass
@@ -464,9 +464,9 @@ class DependencyNetwork(RecursiveModel):
                 return node.embedding
 
     def _update_word_grad(self, node):
-        self.xgrads[node.lower_] += np.dot(self.wm.T, node.gradient)
+        self.xgrads[node.text] += np.dot(self.wm.T, node.gradient)
         try:
-            self.dwm += np.dot(node.gradient, self.vectors[node.lower_].T)
+            self.dwm += np.dot(node.gradient, self.vectors[node.text].T)
         except KeyError:
             pass
 
@@ -535,7 +535,7 @@ class HolographicNetwork(DependencyNetwork):
         vector for the word corresponding to the leaf node is used as the
         embedding.'''
         try:
-            emb = np.copy(self.vectors[node.lower_])
+            emb = np.copy(self.vectors[node.text])
         except KeyError:
             emb = np.zeros(self.dim).reshape((self.dim, 1))
 
@@ -586,7 +586,7 @@ class HolographicNetwork(DependencyNetwork):
 
     def _update_word_grad(self, node):
         try:
-            self.xgrads[node.lower_] += node.gradient
+            self.xgrads[node.text] += node.gradient
         except KeyError:
             pass
 
