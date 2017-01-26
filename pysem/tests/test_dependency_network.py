@@ -129,8 +129,6 @@ def test_bias_gradients(dnn, snli, get_cost, num_grad, classifier):
     xs, ys = random_data(snli)
 
     dnn.forward_pass(xs)
-    deps = [node.dep_ for node in dnn.tree if node.dep_ != 'ROOT']
-
     for _ in range(n_gradient_checks):
         idx = np.random.randint(0, dnn.bias.size, size=1)
         params = dnn.bias.flat

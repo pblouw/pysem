@@ -391,7 +391,7 @@ class DependencyNetwork(RecursiveModel):
             emb = np.zeros(self.dim).reshape((self.dim, 1))
 
         for child in children:
-            emb += np.dot(self.weights[child.dep_], child.embedding)           
+            emb += np.dot(self.weights[child.dep_], child.embedding)
 
         node.embedding = self.tanh(emb + self.bias)
         node.computed = True

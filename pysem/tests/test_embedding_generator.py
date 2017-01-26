@@ -88,7 +88,7 @@ def test_bias_gradients(embgen, dnn, snli):
         params = embgen.bias.flat
 
         numerical_grad = num_grad(params, idx, embgen, dnn, s2)
-        
+
         embgen.forward_pass(s2, dnn.get_root_embedding())
         embgen.backward_pass(rate=rate)
         dnn.backward_pass(embgen.pass_grad, rate=rate)
