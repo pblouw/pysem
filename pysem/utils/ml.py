@@ -72,8 +72,7 @@ class LogisticRegression(Model):
 
     def predict(self, xs):
         '''Predict labels associated with a set of input feature vectors.'''
-        probs = self.softmax(np.dot(self.weights, xs))
-        return np.argmax(probs, axis=0)
+        return np.argmax(self.get_probs(xs), axis=0)
 
     def get_cost(self, xs, ys):
         '''Evaluate cost of current parameters for gradient checking.'''

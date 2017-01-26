@@ -50,6 +50,7 @@ class EmbeddingGenerator(DependencyNetwork):
     def __init__(self, dim, subvocabs, vectors=None):
         self.dim = dim
         self.weights = defaultdict(square_zeros(self.dim))
+        self.bias = np.zeros((self.dim, 1))
         self.subvocabs = subvocabs
 
         for dep in self.deps:
@@ -105,6 +106,7 @@ class EmbeddingGenerator(DependencyNetwork):
         self.reset_comp_graph()
         self.wgrads = defaultdict(square_zeros(self.dim))
         self.dws = {d: np.zeros_like(self.word_weights[d]) for d in self.deps}
+        self.bgrad = np.zeros_like(self.bias)
         self.rate = rate
         self.compute_gradients()
         self.update_weights()
@@ -126,7 +128,7 @@ class EmbeddingGenerator(DependencyNetwork):
             parent = self.get_parent(node)
             if not node.computed and parent.computed:
                 extract = np.dot(self.weights[node.dep_], parent.embedding)
-                extract = np.tanh(extract)
+                extract = np.tanh(extract + self.bias)
                 node.embedding = extract
                 node.computed = True
                 product = np.dot(self.word_weights[node.dep_], node.embedding)
@@ -169,6 +171,7 @@ class EmbeddingGenerator(DependencyNetwork):
                     node.gradient = ngrad
                 else:
                     node.gradient = self.tanh_grad(node.embedding) * ngrad
+                    self.bgrad += node.gradient
 
                 node.computed = True
 
@@ -218,6 +221,7 @@ class EmbeddingGenerator(DependencyNetwork):
             count = sum([1 for node in self.tree if node.dep_ == dep])
             self.weights[dep] -= self.rate * self.wgrads[dep] / count
             self.word_weights[dep] -= self.rate * self.dws[dep] / count
+            self.bias -= self.rate * (self.bgrad / len(self.tree)-1)
 
 
 class TreeGenerator(DependencyNetwork):

@@ -76,6 +76,28 @@ def test_dep_weight_gradients(embgen, dnn, snli):
             assert np.allclose(analytic_grad, numerical_grad)
 
 
+def test_bias_gradients(embgen, dnn, snli):
+    sample = random.choice(snli.train_data)
+    s1 = sample.sentence1
+    s2 = sample.sentence2
+
+    for _ in range(n_gradient_checks):
+        dnn.forward_pass(s1)
+
+        idx = np.random.randint(0, embgen.bias.size, size=1)
+        params = embgen.bias.flat
+
+        numerical_grad = num_grad(params, idx, embgen, dnn, s2)
+        
+        embgen.forward_pass(s2, dnn.get_root_embedding())
+        embgen.backward_pass(rate=rate)
+        dnn.backward_pass(embgen.pass_grad, rate=rate)
+
+        analytic_grad = embgen.bgrad.flat[idx]
+
+        assert np.allclose(analytic_grad, numerical_grad)
+
+
 def test_word_weight_gradients(embgen, dnn, snli):
     sample = random.choice(snli.train_data)
     s1 = sample.sentence1

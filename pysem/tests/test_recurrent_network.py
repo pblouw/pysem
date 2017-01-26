@@ -79,7 +79,7 @@ def test_embedding_gradients(rnn, snli, get_cost, num_grad, classifier):
 
     rnn.forward_pass(xs)
     words = rnn.batch[0]
-    words = [w.lower() for w in words if w != 'PAD' and w != '-']
+    words = [w for w in words if w != 'PAD' and w != '-']
 
     # Use random element in each word embedding for n numerical gradient checks
     for _ in range(n_gradient_checks):

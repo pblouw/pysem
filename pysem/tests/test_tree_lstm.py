@@ -215,7 +215,7 @@ def test_input_vec_gradients(treeLSTM, snli, get_cost, num_grad, classifier):
     xs, ys = random_data(snli)
 
     treeLSTM.forward_pass(xs)
-    words = [n.lower_ for n in treeLSTM.tree if n.lower_ != '-']
+    words = [n.text for n in treeLSTM.tree if n.text != '-']
 
     # Use random element in each word embedding for n numerical gradient checks
     for _ in range(n_gradient_checks):

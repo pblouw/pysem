@@ -246,7 +246,7 @@ class SNLI(DataHandler):
         acc = []
         for item in datalist:
             pair = item['sentence1'] + ' ' + item['sentence2']
-            acc.append(pair.lower())
+            acc.append(pair)
         return ' '.join(acc)
 
     @staticmethod

@@ -132,15 +132,14 @@ def test_bias_gradients(dnn, snli, get_cost, num_grad, classifier):
     deps = [node.dep_ for node in dnn.tree if node.dep_ != 'ROOT']
 
     for _ in range(n_gradient_checks):
-        for dep in deps:
-            idx = np.random.randint(0, dnn.biases[dep].size, size=1)
-            params = dnn.biases[dep].flat
+        idx = np.random.randint(0, dnn.bias.size, size=1)
+        params = dnn.bias.flat
 
-            numerical_grad = num_grad(dnn, params, idx, xs, ys, classifier)
-            train_step(dnn, classifier, xs, ys)
-            analytic_grad = dnn.bgrads[dep].flat[idx]
+        numerical_grad = num_grad(dnn, params, idx, xs, ys, classifier)
+        train_step(dnn, classifier, xs, ys)
+        analytic_grad = dnn.bgrad.flat[idx]
 
-            assert np.allclose(analytic_grad, numerical_grad)
+        assert np.allclose(analytic_grad, numerical_grad)
 
 
 def test_wm_gradients(dnn, snli, get_cost, num_grad, classifier):
