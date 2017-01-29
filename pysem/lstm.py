@@ -128,7 +128,7 @@ class LSTM(RecursiveModel):
 
     def forward_pass(self, batch):
         '''Convert input sentences into sequence and compute cell states.'''
-        self.batch = [[n.lower_ for n in self.parser(sen)] for sen in batch]
+        self.batch = [[n.text for n in self.parser(sen)] for sen in batch]
         self.bsize = len(batch)
         self.seqlen = max([len(s) for s in self.batch])
 
@@ -219,7 +219,7 @@ class LSTM(RecursiveModel):
             for idx, item in enumerate(self.ws[i]):
                 if item != 'PAD':
                     try:
-                        word = item.lower()
+                        word = item
                         grad = np.copy(dx[:, idx].reshape(self.dim, 1))
                         self.x_grads[word] += grad
                     except KeyError:
@@ -271,8 +271,8 @@ class LSTM(RecursiveModel):
         self.y_bias -= rate * self.y_bias_grad
 
         # update word embeddings
-        word_set = [w.lower() for w in set(flatten(self.batch)) if w != 'PAD']
-        all_words = [w.lower() for w in flatten(self.batch) if w != 'PAD']
+        word_set = [w for w in set(flatten(self.batch)) if w != 'PAD']
+        all_words = [w for w in flatten(self.batch) if w != 'PAD']
 
         for word in word_set:
             count = all_words.count(word)
@@ -287,7 +287,7 @@ class LSTM(RecursiveModel):
         for idx, word in enumerate(words):
             if word != 'PAD':
                 try:
-                    vector = np.copy(self.vectors[word.lower()].flatten())
+                    vector = np.copy(self.vectors[word].flatten())
                     array[:, idx] = vector
                 except KeyError:
                     pass
@@ -488,7 +488,7 @@ class TreeLSTM(RecursiveModel):
             self.dfW += np.dot(f_grad, node.inp_vec.T)
             self.dfU += np.dot(f_grad, child.embedding.T)
 
-        self.x_grads[node.lower_] += x_grad
+        self.x_grads[node.text] += x_grad
         node.computed = True
 
     def update_node(self, node, children):
@@ -501,7 +501,7 @@ class TreeLSTM(RecursiveModel):
         else:
             node.h_tilda = np.zeros((self.c_dim, 1))
         try:
-            node.inp_vec = np.copy(self.vectors[node.lower_])
+            node.inp_vec = np.copy(self.vectors[node.text])
         except KeyError:
             node.inp_vec = np.zeros((self.i_dim, 1))
 
@@ -530,8 +530,8 @@ class TreeLSTM(RecursiveModel):
         '''Use node gradients to update the word embeddings at each node.'''
         for node in self.tree:
             try:
-                word = node.lower_
-                count = sum([1 for x in self.tree if x.lower_ == word])
+                word = node.text
+                count = sum([1 for x in self.tree if x.text == word])
                 self.vectors[word] -= self.rate * self.x_grads[word] / count
             except KeyError:
                 pass

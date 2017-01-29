@@ -184,7 +184,7 @@ class RecurrentNetwork(RecursiveModel):
         for idx, word in enumerate(words):
             if word != 'PAD':
                 try:
-                    array[:, idx] = self.vectors[word.lower()].flatten()
+                    array[:, idx] = self.vectors[word].flatten()
                 except KeyError:
                     pass
         return array
@@ -205,7 +205,7 @@ class RecurrentNetwork(RecursiveModel):
 
     def forward_pass(self, batch):
         '''Convert input sentences into sequence and compute hidden states.'''
-        self.batch = [[n.lower_ for n in self.parser(sen)] for sen in batch]
+        self.batch = [[n.text for n in self.parser(sen)] for sen in batch]
         self.bsize = len(batch)
         self.seqlen = max([len(s) for s in self.batch])
 
@@ -243,7 +243,7 @@ class RecurrentNetwork(RecursiveModel):
             for idx, word in enumerate(self.xs[i]):
                 if word != 'PAD':
                     try:
-                        item = word.lower()
+                        item = word
                         self.xgrads[item] += dh[:, idx].reshape(self.dim, 1)
                     except KeyError:
                         pass
@@ -259,8 +259,8 @@ class RecurrentNetwork(RecursiveModel):
         self.params['bh'] -= rate * self.dbh
         self.params['by'] -= rate * self.dby
 
-        word_set = [w.lower() for w in set(flatten(self.batch)) if w != 'PAD']
-        all_words = [w.lower() for w in flatten(self.batch) if w != 'PAD']
+        word_set = [w for w in set(flatten(self.batch)) if w != 'PAD']
+        all_words = [w for w in flatten(self.batch) if w != 'PAD']
 
         for word in word_set:
             try:
