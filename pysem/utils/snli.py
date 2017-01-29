@@ -141,9 +141,9 @@ class CompositeModel(object):
             w2 = np.copy(self.encoder_copy.weights[dep])
             self.encoder.weights[dep] = (w1 + w2) / 2.
 
-            b1 = np.copy(self.encoder.bias)
-            b2 = np.copy(self.encoder_copy.bias)
-            self.encoder.bias = (b1 + b2) / 2.
+            b1 = np.copy(self.encoder.biases[dep])
+            b2 = np.copy(self.encoder_copy.biases[dep])
+            self.encoder.biases[dep] = (b1 + b2) / 2.
 
         for word in self.word_set:
             if word in self.encoder.vocab:

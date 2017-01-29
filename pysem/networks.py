@@ -315,12 +315,13 @@ class DependencyNetwork(RecursiveModel):
     def __init__(self, dim, vocab, eps=0.3, pretrained=False):
         self.dim = dim
         self.vocab = sorted(list(vocab))
+        self.biases = defaultdict(flat_zeros(self.dim))
         self.weights = defaultdict(square_zeros(self.dim))
         self.pretrained_vecs(pretrained) if pretrained else self.random_vecs()
-        self.bias = np.zeros((self.dim, 1))
 
         for dep in self.deps:
             self.weights[dep] = self.gaussian_id(self.dim)
+            self.biases[dep] = np.zeros((self.dim, 1))
 
         self.wm = self.gaussian_id(self.dim)
 
@@ -352,8 +353,8 @@ class DependencyNetwork(RecursiveModel):
                 nlgrad = nlgrad.reshape((len(nlgrad), 1))
 
                 self.wgrads[node.dep_] += wgrad
+                self.bgrads[node.dep_] += parent.gradient
                 node.gradient = cgrad * nlgrad
-                self.bgrad += node.gradient
                 node.computed = True
                 self._update_word_grad(node)
 
@@ -392,8 +393,9 @@ class DependencyNetwork(RecursiveModel):
 
         for child in children:
             emb += np.dot(self.weights[child.dep_], child.embedding)
+            emb += self.biases[child.dep_]
 
-        node.embedding = self.tanh(emb + self.bias)
+        node.embedding = self.tanh(emb)
         node.computed = True
 
     def update_word_embeddings(self):
@@ -411,7 +413,7 @@ class DependencyNetwork(RecursiveModel):
         for dep in self.wgrads:
             depcount = len([True for node in self.tree if node.dep_ == dep])
             self.weights[dep] -= self.rate * self.wgrads[dep] / depcount
-            self.bias -= self.rate * (self.bgrad / len(self.tree))
+            self.biases[dep] -= self.rate * self.bgrads[dep] / depcount
 
         self.wm -= self.rate * (self.dwm / len(self.tree))
 
@@ -426,8 +428,8 @@ class DependencyNetwork(RecursiveModel):
         '''Compute gradients for every weight matrix and input word vector
         used when computing activations in accordance with the comp graph.'''
         self.wgrads = defaultdict(square_zeros(self.dim))
+        self.bgrads = defaultdict(flat_zeros(self.dim))
         self.xgrads = defaultdict(flat_zeros(self.dim))
-        self.bgrad = np.zeros_like(self.bias)
         self.dwm = np.zeros_like(self.wm)
         self._set_root_gradient(error_grad)
         self.rate = rate
@@ -475,7 +477,6 @@ class DependencyNetwork(RecursiveModel):
                 embedding = self.get_root_embedding()
                 node.gradient = grad * self.tanh_grad(embedding)
                 node.computed = True
-                self.bgrad += node.gradient
                 self._update_word_grad(node)
 
 

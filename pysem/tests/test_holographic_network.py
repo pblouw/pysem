@@ -40,7 +40,7 @@ def test_backward_pass(hnn, snli):
     error_grad = np.random.random((hnn.dim, 1)) * 2 * 0.1 - 0.1
 
     hnn.forward_pass(sen)
-    words = [node.text for node in hnn.tree if node.text in snli.vocab]
+    words = [node.lower_ for node in hnn.tree if node.lower_ in snli.vocab]
 
     # check that all of the words are in the vocab
     for word in words:
@@ -76,7 +76,7 @@ def test_embedding_gradients(hnn, snli, get_cost, num_grad, classifier):
     xs, ys = random_data(snli)
 
     hnn.forward_pass(xs)
-    words = [node.text for node in hnn.tree if node.text in snli.vocab]
+    words = [node.lower_ for node in hnn.tree if node.lower_ in snli.vocab]
 
     print(xs)
     for _ in range(n_gradient_checks):
