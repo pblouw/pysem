@@ -1,4 +1,5 @@
 import random
+import pickle
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -7,6 +8,8 @@ from pysem.networks import RecurrentNetwork, DependencyNetwork
 from pysem.utils.multiprocessing import flatten
 from itertools import islice
 from copy import deepcopy
+
+from sklearn.feature_extraction.text import CountVectorizer
 
 
 class CompositeModel(object):
@@ -46,9 +49,13 @@ class CompositeModel(object):
             self.acc.append(self.rnn_accuracy(self.dev_data))
             self._train_recurrent_model()
 
-        if isinstance(self.encoder, DependencyNetwork):
+        elif isinstance(self.encoder, DependencyNetwork):
             self.acc.append(self.dnn_accuracy(self.dev_data))
             self._train_recursive_model()
+
+        elif isinstance(self.encoder, BagOfWords):
+            self.acc.append(self.rnn_accuracy(self.dev_data))
+            self._train_bow_model()
 
     def _log_status(self, n):
         '''Keep track of training progress to log accuracy, print status.'''
@@ -61,6 +68,22 @@ class CompositeModel(object):
                 self.acc.append(self.rnn_accuracy(self.dev_data))
             if isinstance(self.encoder, DependencyNetwork):
                 self.acc.append(self.dnn_accuracy(self.dev_data))
+            if isinstance(self.encoder, BagOfWords):
+                self.acc.append(self.rnn_accuracy(self.dev_data))
+
+    def _train_bow_model(self):
+        for n in range(self.iters):
+            self.encoder_copy = deepcopy(self.encoder)
+            batch = random.sample(self.train_data, self.bsize)
+            s1s = [sample.sentence1 for sample in batch]
+            s2s = [sample.sentence2 for sample in batch]
+            ys = SNLI.binarize([sample.label for sample in batch])
+
+            self.training_iteration(s1s, s2s, ys)
+            self.bow_encoder_update()
+            self._log_status(n)
+
+        self.acc.append(self.rnn_accuracy(self.dev_data))
 
     def _train_recurrent_model(self):
         '''Adapt training regime to accomodate recurrent encoder structure.'''
@@ -116,6 +139,10 @@ class CompositeModel(object):
 
         self.encoder.backward_pass(emb1_grad, rate=self.rate)
         self.encoder_copy.backward_pass(emb2_grad, rate=self.rate)
+
+    def bow_encoder_update(self):
+        avg = (self.encoder.matrix + self.encoder_copy.matrix) / 2.0
+        self.encoder.matrix = avg
 
     def rnn_encoder_update(self):
         '''Update an RNN encoder based on the current training iteration by
@@ -224,31 +251,46 @@ class CompositeModel(object):
             plt.show()
 
 
-def bow_accuracy(data, classifier, embedding_matrix, vectorizer):
-    data = (x for x in data)  # convert to generator to use islice
-    n_correct = 0
-    n_total = 0
-    batchsize = 5000
+class BagOfWords(object):
 
-    while True:
-        batch = list(islice(data, batchsize))
-        n_total += len(batch)
-        if len(batch) == 0:
-            break
+    def __init__(self, dim, vocab, pretrained=False):
+        self.dim = dim
+        self.vectorizer = CountVectorizer(binary=True)
+        self.vectorizer.fit(vocab)
+        self.vocab = self.vectorizer.get_feature_names()
+        self.pretrained_vecs(pretrained) if pretrained else self.random_vecs()
 
-        s1s = [sample.sentence1 for sample in batch]
-        s2s = [sample.sentence2 for sample in batch]
+    def forward_pass(self, batch):
+        self.bsize = len(batch)
+        self.indicators = self.vectorizer.transform(batch).toarray().T
+        self.embeddings = np.dot(self.matrix, self.indicators)
 
-        s1_indicators = vectorizer.transform(s1s).toarray().T
-        s2_indicators = vectorizer.transform(s2s).toarray().T
+    def backward_pass(self, error_grad, rate=0.1):
+        matrix_grad = np.dot(error_grad, self.indicators.T) / self.bsize
+        self.matrix -= rate * matrix_grad
 
-        s1_embeddings = np.dot(embedding_matrix, s1_indicators)
-        s2_embeddings = np.dot(embedding_matrix, s2_indicators)
+    def get_root_embedding(self):
+        return self.embeddings
 
-        xs = np.vstack((s1_embeddings, s2_embeddings))
-        ys = SNLI.binarize([sample.label for sample in batch])
+    def pretrained_vecs(self, path):
+        dim = self.dim
+        idx_lookup = {word: idx for idx, word in enumerate(self.vocab)}
+        self.matrix = np.zeros((dim, len(self.vocab)))
 
-        predictions = classifier.predict(xs)
-        n_correct += sum(np.equal(predictions, np.argmax(ys, axis=0)))
+        with open(path, 'rb') as pfile:
+            word2vec = pickle.load(pfile)
 
-    return n_correct / n_total
+        for word in self.vocab:
+            idx = idx_lookup[word]
+            try:
+                embedding = word2vec[word]
+            except KeyError:
+                scale = 1 / np.sqrt(dim)
+                embedding = np.random.normal(loc=0, scale=scale, size=dim)
+
+            self.matrix[:, idx] = embedding
+
+    def random_vecs(self):
+        scale = 1 / np.sqrt(self.dim)
+        size = (self.dim, len(self.vectorizer.get_feature_names()))
+        self.matrix = np.random.normal(loc=0, scale=scale, size=size)

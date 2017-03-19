@@ -1,47 +1,37 @@
-import numpy as np
-
 from pysem.utils.ml import LogisticRegression
-from pysem.utils.snli import CompositeModel, bow_accuracy
-from sklearn.feature_extraction.text import CountVectorizer
+from pysem.utils.snli import CompositeModel, BagOfWords
 
 
 def test_bow_accuracy(snli):
     dim = 50
-    snli.load_xy_pairs()
-
-    vectorizer = CountVectorizer(binary=True)
-    vectorizer.fit(snli.vocab)
-
-    scale = 1 / np.sqrt(dim)
-    size = (dim, len(vectorizer.get_feature_names()))
-    emb_matrix = np.random.normal(loc=0, scale=scale, size=size)
+    encoder = BagOfWords(dim=dim, vocab=snli.vocab)
     classifier = LogisticRegression(n_features=2*dim, n_labels=3)
 
-    acc = bow_accuracy(snli.train_data, classifier, emb_matrix, vectorizer)
+    model = CompositeModel(snli, encoder, classifier)
+    model.train(iters=2, bsize=1, rate=0.01, log_interval=2)
 
-    assert 0 < acc < 0.65
+    assert len(model.acc) == 2
+    assert 0 < model.acc[0] < 0.65
 
 
 def test_rnn_accuracy(snli, rnn):
     classifier = LogisticRegression(n_features=2*rnn.dim, n_labels=3)
+
     model = CompositeModel(snli, rnn, classifier)
-    model.acc.append(model.rnn_accuracy(model.dev_data))
-
-    assert 0 < model.acc[0] < 0.65
-
     model.train(iters=2, bsize=1, rate=0.01, log_interval=2)
-    assert len(model.acc) == 3
+
+    assert len(model.acc) == 2
+    assert 0 < model.acc[0] < 0.65
 
 
 def test_dnn_accuracy(snli, dnn):
     classifier = LogisticRegression(n_features=2*dnn.dim, n_labels=3)
+
     model = CompositeModel(snli, dnn, classifier)
-    model.acc.append(model.dnn_accuracy(model.dev_data))
-
-    assert 0 < model.acc[0] < 0.65
-
     model.train(iters=2, bsize=1, rate=0.01, log_interval=2)
-    assert len(model.acc) == 3
+
+    assert len(model.acc) == 2
+    assert 0 < model.acc[0] < 0.65
 
 
 def test_average(snli):

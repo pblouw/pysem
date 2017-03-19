@@ -4,7 +4,7 @@ import numpy as np
 
 def test_tree_generator(tree_gen, dnn, snli):
     iters = 100
-    rate = 0.05
+    rate = 0.1
     n = 10
 
     sample = random.choice(snli.train_data)
