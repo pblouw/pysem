@@ -26,7 +26,7 @@ start_time = time.time()
 model = CompositeModel(snli, encoder, classifier)
 
 model.train(iters=50000, bsize=100, rate=0.005, log_interval=1000, schedule=12000)
-print(model.dnn_accuracy(snli.test_data))
+print(model.dnn_accuracy(model.test_data))
 model.plot()
 
 print('Total runtime: ', time.time() - start_time)
