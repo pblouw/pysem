@@ -2,6 +2,7 @@ import platform
 import random
 import time
 import sys
+import pickle
 import numpy as np
 
 from pysem.corpora import SNLI
