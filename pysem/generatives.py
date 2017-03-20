@@ -3,7 +3,7 @@ import numpy as np
 
 from collections import defaultdict
 from pysem.utils.spacy import TokenWrapper
-from pysem.networks import DependencyNetwork, square_zeros
+from pysem.networks import DependencyNetwork, SquareZeros
 
 
 class Node(object):
@@ -49,7 +49,7 @@ class EmbeddingGenerator(DependencyNetwork):
     """
     def __init__(self, dim, subvocabs, vectors=None):
         self.dim = dim
-        self.weights = defaultdict(square_zeros(self.dim))
+        self.weights = defaultdict(SquareZeros(self.dim))
         self.subvocabs = subvocabs
 
         for dep in self.deps:
@@ -103,7 +103,7 @@ class EmbeddingGenerator(DependencyNetwork):
         '''Compute gradients and update every weight matrix used to predict
         words at each node in the tree.'''
         self.reset_comp_graph()
-        self.wgrads = defaultdict(square_zeros(self.dim))
+        self.wgrads = defaultdict(SquareZeros(self.dim))
         self.dws = {d: np.zeros_like(self.word_weights[d]) for d in self.deps}
         self.rate = rate
         self.compute_gradients()
@@ -243,7 +243,7 @@ class TreeGenerator(DependencyNetwork):
         self.why_h = np.random.random((len(self.vocab), dim)) * scale
         self.why_d = np.random.random((len(self.deps), dim)) * scale
 
-        self.wxh = defaultdict(square_zeros(self.dim))
+        self.wxh = defaultdict(SquareZeros(self.dim))
         self.whh = self.random_weights(self.dim, self.dim)
 
         for dep in self.deps:
@@ -349,7 +349,7 @@ class TreeGenerator(DependencyNetwork):
             self.extend_sequence()
 
     def backward_pass(self, rate=0.01):
-        dwxh = defaultdict(square_zeros(self.dim))
+        dwxh = defaultdict(SquareZeros(self.dim))
         dwhh = np.zeros_like(self.whh)
 
         dwhy_w = np.zeros_like(self.why_w)

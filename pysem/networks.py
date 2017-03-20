@@ -9,20 +9,24 @@ from pysem.utils.vsa import normalize, unitary_vector, get_convolution_matrix
 from pysem.utils.multiprocessing import flatten
 
 
-def square_zeros(dim):
-    '''Returns a function that produces a square array of zeros when called.
-    Used to initialize defaultdicts that default to a numpy array of zeros.'''
-    def func():
-        return np.zeros((dim, dim))
-    return func
+class SquareZeros(object):
+    '''Returns a square array of zeros when called. Used to initialize
+    defaultdicts that default to a numpy array of zeros.'''
+    def __init__(self, dim):
+        self.dim = dim
+
+    def __call__(self):
+        return np.zeros((self.dim, self.dim))
 
 
-def flat_zeros(dim):
-    '''Returns a function that produces a flat array of zeros when called.
-    Used to initialize defaultdicts that default to a numpy array of zeros.'''
-    def func():
-        return np.zeros((dim, 1))
-    return func
+class FlatZeros(object):
+    '''Returns a flat array of zeros when called. Used to initialize
+    defaultdicts that default to a numpy array of zeros.'''
+    def __init__(self, dim):
+        self.dim = dim
+
+    def __call__(self):
+        return np.zeros((self.dim, 1))
 
 
 class RecursiveModel(object):
@@ -219,7 +223,7 @@ class RecurrentNetwork(RecursiveModel):
         '''Compute gradients for hidden-to-hidden weight matrix and input word
         vectors before performing weight updates.'''
         error_grad = error_grad * self.tanh_grad(self.get_root_embedding())
-        self.xgrads = defaultdict(flat_zeros(self.dim))
+        self.xgrads = defaultdict(FlatZeros(self.dim))
 
         dwhh = np.zeros_like(self.params['Whh'])
         dbh = np.zeros_like(self.params['bh'])
@@ -315,8 +319,8 @@ class DependencyNetwork(RecursiveModel):
     def __init__(self, dim, vocab, eps=0.3, pretrained=False):
         self.dim = dim
         self.vocab = sorted(list(vocab))
-        self.biases = defaultdict(flat_zeros(self.dim))
-        self.weights = defaultdict(square_zeros(self.dim))
+        self.biases = defaultdict(FlatZeros(self.dim))
+        self.weights = defaultdict(SquareZeros(self.dim))
         self.pretrained_vecs(pretrained) if pretrained else self.random_vecs()
 
         for dep in self.deps:
@@ -324,6 +328,26 @@ class DependencyNetwork(RecursiveModel):
             self.biases[dep] = np.zeros((self.dim, 1))
 
         self.wm = self.gaussian_id(self.dim)
+
+    def save(self, filename):
+        '''Save model parameters to a pickle file.'''
+        params = {'biases': self.biases, 'weights': self.weights, 'wm': self.wm,
+                  'vectors': self.vectors, 'vocab': self.vocab, 'dim': self.dim}
+
+        with open(filename, 'wb') as pfile:
+            pickle.dump(params, pfile)
+
+    def load(self, filename):
+        '''Load model parameters from a pickle file.'''
+        with open(filename, 'rb') as pfile:
+            params = pickle.load(pfile)
+
+        self.dim = params['dim']
+        self.vocab = params['vocab']
+        self.vectors = params['vectors']
+        self.weights = params['weights']
+        self.biases = params['biases']
+        self.wm = params['wm']
 
     def reset_comp_graph(self):
         '''Flag all nodes in the graph as being uncomputed.'''
@@ -427,9 +451,9 @@ class DependencyNetwork(RecursiveModel):
     def backward_pass(self, error_grad, rate=0.35):
         '''Compute gradients for every weight matrix and input word vector
         used when computing activations in accordance with the comp graph.'''
-        self.wgrads = defaultdict(square_zeros(self.dim))
-        self.bgrads = defaultdict(flat_zeros(self.dim))
-        self.xgrads = defaultdict(flat_zeros(self.dim))
+        self.wgrads = defaultdict(SquareZeros(self.dim))
+        self.bgrads = defaultdict(FlatZeros(self.dim))
+        self.xgrads = defaultdict(FlatZeros(self.dim))
         self.dwm = np.zeros_like(self.wm)
         self._set_root_gradient(error_grad)
         self.rate = rate
@@ -522,8 +546,8 @@ class HolographicNetwork(DependencyNetwork):
     def __init__(self, dim, vocab):
         self.dim = dim
         self.vocab = sorted(list(vocab))
-        self.weights = defaultdict(square_zeros(dim))
-        self.biases = defaultdict(flat_zeros(dim))
+        self.weights = defaultdict(SquareZeros(dim))
+        self.biases = defaultdict(FlatZeros(dim))
         self.random_vecs()
 
         for dep in self.deps:
@@ -549,8 +573,8 @@ class HolographicNetwork(DependencyNetwork):
     def backward_pass(self, error_grad, rate=0.35):
         '''Compute gradients for every weight matrix and input word vector
         used when computing activations in accordance with the comp graph.'''
-        self.bgrads = defaultdict(flat_zeros(self.dim))
-        self.xgrads = defaultdict(flat_zeros(self.dim))
+        self.bgrads = defaultdict(FlatZeros(self.dim))
+        self.xgrads = defaultdict(FlatZeros(self.dim))
         self._set_root_gradient(error_grad)
         self.rate = rate
 

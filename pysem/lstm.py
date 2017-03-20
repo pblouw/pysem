@@ -3,7 +3,7 @@ import numpy as np
 from collections import defaultdict
 from pysem.utils.spacy import TokenWrapper
 from pysem.utils.multiprocessing import flatten
-from pysem.networks import RecursiveModel, flat_zeros
+from pysem.networks import RecursiveModel, FlatZeros
 
 
 class LSTM(RecursiveModel):
@@ -168,7 +168,7 @@ class LSTM(RecursiveModel):
         self.u_bias_grad = np.zeros_like(self.u_bias)
         self.y_bias_grad = np.sum(error_grad, axis=1).reshape(self.dim, 1)
 
-        self.x_grads = defaultdict(flat_zeros(self.dim))
+        self.x_grads = defaultdict(FlatZeros(self.dim))
 
         h_grad = np.dot(self.yW.T, error_grad)
         s_grad = np.zeros_like(h_grad)
@@ -572,7 +572,7 @@ class TreeLSTM(RecursiveModel):
     def backward_pass(self, error_grad, rate=0.01):
         '''Compute gradients for every weight matrix and input word vector
         used when computing activations in accordance with the comp graph.'''
-        self.x_grads = defaultdict(flat_zeros(self.i_dim))
+        self.x_grads = defaultdict(FlatZeros(self.i_dim))
 
         self.diW = np.zeros_like(self.iW)
         self.doW = np.zeros_like(self.oW)
