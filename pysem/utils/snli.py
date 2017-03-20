@@ -367,7 +367,7 @@ class ProductOfWords(object):
                 pass
 
         for word in self.wgrads:
-            try: 
+            try:
                 count = sum([1 for x in self.words if x == word])
                 self.vectors[word] -= self.rate * self.wgrads[word] / count
             except KeyError:

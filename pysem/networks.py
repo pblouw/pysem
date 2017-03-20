@@ -331,8 +331,9 @@ class DependencyNetwork(RecursiveModel):
 
     def save(self, filename):
         '''Save model parameters to a pickle file.'''
-        params = {'biases': self.biases, 'weights': self.weights, 'wm': self.wm,
-                  'vectors': self.vectors, 'vocab': self.vocab, 'dim': self.dim}
+        params = {'biases': self.biases, 'weights': self.weights,
+                  'wm': self.wm, 'vectors': self.vectors, 'vocab': self.vocab,
+                  'dim': self.dim}
 
         with open(filename, 'wb') as pfile:
             pickle.dump(params, pfile)
