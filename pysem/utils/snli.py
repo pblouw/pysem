@@ -95,6 +95,10 @@ class CompositeModel(object):
     def _train_recurrent_model(self):
         '''Adapt training regime to accomodate recurrent encoder structure.'''
         for n in range(self.iters):
+
+            if n % 1000 == 0 and n != 0:
+                print('Completed ', n, ' training iterations.')
+
             self.encoder_copy = deepcopy(self.encoder)
             batch = random.sample(self.train_data, self.bsize)
             s1s = [sample.sentence1 for sample in batch]
@@ -216,6 +220,26 @@ class CompositeModel(object):
                 s1_vec = np.copy(self.encoder.vectors[word])
                 s2_vec = np.copy(self.encoder_copy.vectors[word])
                 self.encoder.vectors[word] = (s1_vec + s2_vec) / 2.
+
+    def predict(self, s1, s2):
+        label_dict = {0: 'entailment', 1: 'neutral', 2: 'contradiction'}
+
+        if isinstance(self.encoder, DependencyNetwork):
+            self.encoder.forward_pass(s1)
+            s1_emb = self.encoder.get_root_embedding()
+            self.encoder.forward_pass(s2)
+            s2_emb = self.encoder.get_root_embedding()
+
+        else:
+            self.encoder.forward_pass([s1])
+            s1_emb = self.encoder.get_root_embedding()
+            self.encoder.forward_pass([s2])
+            s2_emb = self.encoder.get_root_embedding()
+
+        xs = np.concatenate((s1_emb, s2_emb))
+        prediction = self.classifier.predict(xs)
+
+        return label_dict[prediction[0]]
 
     def dnn_accuracy(self, data):
         count = 0
