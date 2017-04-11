@@ -4,10 +4,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from pysem.corpora import SNLI
-from pysem.networks import RecurrentNetwork, DependencyNetwork, FlatZeros
+from pysem.networks import RecurrentNetwork, DependencyNetwork
 from pysem.utils.multiprocessing import flatten
 from itertools import islice
-from collections import defaultdict
 from copy import deepcopy
 
 from sklearn.feature_extraction.text import CountVectorizer
@@ -58,10 +57,6 @@ class CompositeModel(object):
             self.acc.append(self.rnn_accuracy(self.dev_data))
             self._train_bow_model()
 
-        elif isinstance(self.encoder, ProductOfWords):
-            self.acc.append(self.dnn_accuracy(self.dev_data))
-            self._train_product_model()
-
     def _log_status(self, n):
         '''Keep track of training progress to log accuracy, print status.'''
         if n % self.schedule == 0 and n != 0:
@@ -75,8 +70,6 @@ class CompositeModel(object):
                 self.acc.append(self.dnn_accuracy(self.dev_data))
             elif isinstance(self.encoder, BagOfWords):
                 self.acc.append(self.rnn_accuracy(self.dev_data))
-            elif isinstance(self.encoder, ProductOfWords):
-                self.acc.append(self.dnn_accuracy(self.dev_data))
 
     def _train_bow_model(self):
         for n in range(self.iters):
@@ -110,29 +103,6 @@ class CompositeModel(object):
             self._log_status(n)
 
         self.acc.append(self.rnn_accuracy(self.dev_data))
-
-    def _train_product_model(self):
-        '''Adapt training regime to accomodate recursive encoder structure.'''
-        for n in range(self.iters):
-            self.encoder.tree = None
-            self.encoder_copy = deepcopy(self.encoder)
-            batch = random.sample(self.train_data, self.bsize)
-            w1 = []
-            w2 = []
-            for sample in batch:
-                s1 = sample.sentence1
-                s2 = sample.sentence2
-                ys = SNLI.binarize([sample.label])
-                self.training_iteration(s1, s2, ys)
-
-                w1 += [w for w in self.encoder.words]
-                w2 += [w for w in self.encoder_copy.words]
-
-            self.word_set = set(w1 + w2)
-            self.prod_encoder_update()
-            self._log_status(n)
-
-        self.acc.append(self.dnn_accuracy(self.dev_data))
 
     def _train_recursive_model(self):
         '''Adapt training regime to accomodate recursive encoder structure.'''
@@ -206,15 +176,6 @@ class CompositeModel(object):
             b2 = np.copy(self.encoder_copy.biases[dep])
             self.encoder.biases[dep] = (b1 + b2) / 2.
 
-        for word in self.word_set:
-            if word in self.encoder.vocab:
-                s1_vec = np.copy(self.encoder.vectors[word])
-                s2_vec = np.copy(self.encoder_copy.vectors[word])
-                self.encoder.vectors[word] = (s1_vec + s2_vec) / 2.
-
-    def prod_encoder_update(self):
-        '''Update a Product encoder based on the current training iteration by
-        averaging the weights of the encoder and its copy.'''
         for word in self.word_set:
             if word in self.encoder.vocab:
                 s1_vec = np.copy(self.encoder.vectors[word])
@@ -298,9 +259,6 @@ class CompositeModel(object):
         if isinstance(self.encoder, DependencyNetwork):
             avg_costs = self.average(self.classifier.costs, [], self.bsize)
             self.classifier.costs = avg_costs
-        elif isinstance(self.encoder, ProductOfWords):
-            avg_costs = self.average(self.classifier.costs, [], self.bsize)
-            self.classifier.costs = avg_costs
 
         intr = self.log_interval
         xlen = len(self.classifier.costs)
@@ -360,62 +318,3 @@ class BagOfWords(object):
         scale = 1 / np.sqrt(self.dim)
         size = (self.dim, len(self.vectorizer.get_feature_names()))
         self.matrix = np.random.normal(loc=0, scale=scale, size=size)
-
-
-class ProductOfWords(object):
-
-    def __init__(self, dim, vocab, pretrained=False):
-        self.dim = dim
-        self.vocab = vocab
-        self.pretrained_vecs(pretrained) if pretrained else self.random_vecs()
-
-    def forward_pass(self, sentence):
-        self.embedding = np.ones((self.dim, 1))
-        self.words = [t.text for t in DependencyNetwork.parser(sentence)]
-
-        for word in self.words:
-            try:
-                self.embedding *= self.vectors[word]
-            except KeyError:
-                pass
-
-    def backward_pass(self, error_grad, rate=0.1):
-        self.wgrads = defaultdict(FlatZeros(self.dim))
-        self.rate = rate
-
-        for word in set(self.words):
-            try:
-                multiplier = self.embedding / self.vectors[word]
-                self.wgrads[word] = error_grad * multiplier
-            except KeyError:
-                pass
-
-        for word in self.wgrads:
-            try:
-                count = sum([1 for x in self.words if x == word])
-                self.vectors[word] -= self.rate * self.wgrads[word] / count
-            except KeyError:
-                pass
-
-    def get_root_embedding(self):
-        return self.embedding
-
-    def pretrained_vecs(self, path):
-        '''Load pretrained word embeddings for initialization.'''
-        self.vectors = {}
-        with open(path, 'rb') as pfile:
-            pretrained = pickle.load(pfile)
-
-        for word in self.vocab:
-            try:
-                self.vectors[word] = pretrained[word].reshape(self.dim, 1)
-            except KeyError:
-                scale = 1 / np.sqrt(self.dim)
-                randvec = np.random.normal(0, scale=scale, size=(self.dim, 1))
-                self.vectors[word] = randvec
-
-    def random_vecs(self):
-        '''Use random word embeddings for initialization.'''
-        scale = 1 / np.sqrt(self.dim)
-        self.vectors = {word: np.random.normal(loc=0, scale=scale,
-                        size=(self.dim, 1)) for word in self.vocab}
