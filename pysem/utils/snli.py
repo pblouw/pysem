@@ -88,10 +88,6 @@ class CompositeModel(object):
     def _train_recurrent_model(self):
         '''Adapt training regime to accomodate recurrent encoder structure.'''
         for n in range(self.iters):
-
-            if n % 1000 == 0 and n != 0:
-                print('Completed ', n, ' training iterations.')
-
             self.encoder_copy = deepcopy(self.encoder)
             batch = random.sample(self.train_data, self.bsize)
             s1s = [sample.sentence1 for sample in batch]

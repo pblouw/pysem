@@ -34,6 +34,23 @@ def test_dnn_accuracy(snli, dnn):
     assert 0 < model.acc[0] < 0.65
 
 
+def test_predict(snli, dnn, rnn):
+    labels = {'entailment', 'contradiction', 'neutral'}
+
+    classifier = LogisticRegression(n_features=2*dnn.dim, n_labels=3)
+    model = CompositeModel(snli, dnn, classifier)
+    model.train(iters=2, bsize=1, rate=0.01, log_interval=2)
+
+    label = model.predict(s1='The boy ran.', s2='The boy moved.')
+    assert label in labels
+
+    model = CompositeModel(snli, rnn, classifier)
+    model.train(iters=2, bsize=1, rate=0.01, log_interval=2)
+
+    label = model.predict(s1='The boy ran.', s2='The boy moved.')
+    assert label in labels
+
+
 def test_average(snli):
     array = list(range(100))
     assert len(CompositeModel.average(array, [], 10)) == 10
