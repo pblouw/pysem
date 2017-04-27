@@ -180,11 +180,11 @@ class OrderEmbedding(RandomIndexing):
                 for j in range(win):
                     if i+j+1 < len(sen):
                         w = readonly[sen[i+j+1]]
-                        p = HRR(readonly.pos_idx[j])
+                        p = readonly.pos_idx[j]
                         o_sum += w * p
                     if i-j-1 >= 0:
                         w = readonly[sen[i-j-1]]
-                        p = HRR(readonly.neg_idx[j])
+                        p = readonly.neg_idx[j]
                         o_sum += w * p
                 encodings[sen[i]] += o_sum.v
         return encodings
@@ -194,9 +194,9 @@ class OrderEmbedding(RandomIndexing):
         relative to the provided target word in order space'''
         embedding = self.vectors[self.word_to_idx[word], :]
         if position > 0:
-            probe = deconvolve(readonly.pos_idx[position-1], embedding)
+            probe = deconvolve(readonly.pos_idx[position-1].v, embedding)
         else:
-            probe = deconvolve(readonly.neg_idx[abs(position+1)], embedding)
+            probe = deconvolve(readonly.neg_idx[abs(position+1)].v, embedding)
 
         top_n = self.top_matches(probe, n, base_vectors=True)
         for item in top_n:
@@ -221,10 +221,10 @@ class OrderEmbedding(RandomIndexing):
                 continue
             w = readonly[word].v
             if words.index(word) < index:
-                p = readonly.neg_idx[index-words.index(word)-1]
+                p = readonly.neg_idx[index-words.index(word)-1].v
                 probe += convolve(w, p)
             if words.index(word) > index:
-                p = readonly.pos_idx[words.index(word)-index-1]
+                p = readonly.pos_idx[words.index(word)-index-1].v
                 probe += convolve(w, p)
 
         return normalize(probe)

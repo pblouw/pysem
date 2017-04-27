@@ -110,8 +110,8 @@ class PoolContainer(object):
         self.verb_deps = {dep: unitary_vector(self.dim) for dep in deps}
 
     def build_position_tags(self):
-        pos_idx = [unitary_vector(self.dim) for i in range(self.winsize)]
-        neg_idx = [unitary_vector(self.dim) for i in range(self.winsize)]
+        pos_idx = [HRR(unitary_vector(self.dim)) for i in range(self.winsize)]
+        neg_idx = [HRR(unitary_vector(self.dim)) for i in range(self.winsize)]
         self.pos_idx = dict((i, j) for i, j in enumerate(pos_idx))
         self.neg_idx = dict((i, j) for i, j in enumerate(neg_idx))
 
