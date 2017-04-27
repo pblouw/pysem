@@ -2,7 +2,6 @@ import pickle
 import time
 
 from pysem.corpora import SNLI
-from pysem.networks import DependencyNetwork
 from pysem.utils.ml import MultiLayerPerceptron
 from pysem.utils.snli import CompositeModel, BagOfWords
 
@@ -23,7 +22,7 @@ print('Test: ', model.rnn_accuracy(model.test_data))
 print('Train: ', model.rnn_accuracy(model.train_data))
 print('Dev: ', model.rnn_accuracy(model.dev_data))
 
-print('Total runtime: ', time.time() - start_time)
+print('Total runtime: ', ((time.time() - start_time) / 3600.0))
 
 with open('bow_model', 'wb') as pfile:
     pickle.dump(model, pfile)

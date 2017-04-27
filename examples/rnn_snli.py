@@ -1,5 +1,5 @@
-import pickle
 import time
+import pickle
 
 from pysem.corpora import SNLI
 from pysem.networks import RecurrentNetwork
