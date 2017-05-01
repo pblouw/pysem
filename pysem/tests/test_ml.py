@@ -18,15 +18,20 @@ def numerical_gradient(model, params, idx, xs, ys, delta=1e-5):
     return numerical_gradient
 
 
+def data_samples(di, do):
+    xs = np.random.random((di, 2))
+    ys = np.zeros((do, 2))
+    ys[np.random.randint(0, do, 1), 0] = 1
+    ys[np.random.randint(0, do, 1), 1] = 1
+
+    return xs, ys
+
+
 def test_logistic_regression():
     n_features = 50
     n_labels = 3
     n_gradient_checks = 50
-
-    xs = np.random.random((n_features, 2))
-    ys = np.zeros((n_labels, 2))
-    ys[np.random.randint(0, n_labels, 1), 0] = 1
-    ys[np.random.randint(0, n_labels, 1), 1] = 1
+    xs, ys = data_samples(n_features, n_labels)
 
     model = LogisticRegression(n_features=n_features, n_labels=n_labels)
 
@@ -60,11 +65,7 @@ def test_multi_layer_perceptron():
     dh = 25
     do = 3
     n_gradient_checks = 50
-
-    xs = np.random.random((di, 2))
-    ys = np.zeros((do, 2))
-    ys[np.random.randint(0, do, 1), 0] = 1
-    ys[np.random.randint(0, do, 1), 1] = 1
+    xs, ys = data_samples(di, do)
 
     model = MultiLayerPerceptron(di=di, dh=dh, do=do)
 
