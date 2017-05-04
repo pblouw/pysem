@@ -62,8 +62,8 @@ def test_dep_weight_gradients(embgen, dnn, snli):
         for _ in range(n_gradient_checks):
             dnn.forward_pass(s1)
 
-            idx = np.random.randint(0, embgen.weights[dep].size, size=1)
-            params = embgen.weights[dep].flat
+            idx = np.random.randint(0, embgen.d_weights[dep].size, size=1)
+            params = embgen.d_weights[dep].flat
 
             numerical_grad = num_grad(params, idx, embgen, dnn, s2)
 
@@ -71,7 +71,7 @@ def test_dep_weight_gradients(embgen, dnn, snli):
             embgen.backward_pass(rate=rate)
             dnn.backward_pass(embgen.pass_grad, rate=rate)
 
-            analytic_grad = embgen.wgrads[dep].flat[idx]
+            analytic_grad = embgen.dgrads[dep].flat[idx]
 
             assert np.allclose(analytic_grad, numerical_grad)
 
@@ -89,8 +89,8 @@ def test_word_weight_gradients(embgen, dnn, snli):
         for _ in range(n_gradient_checks):
             dnn.forward_pass(s1)
 
-            idx = np.random.randint(0, embgen.word_weights[dep].size, size=1)
-            params = embgen.word_weights[dep].flat
+            idx = np.random.randint(0, embgen.w_weights[dep].size, size=1)
+            params = embgen.w_weights[dep].flat
 
             numerical_grad = num_grad(params, idx, embgen, dnn, s2)
 
@@ -98,6 +98,6 @@ def test_word_weight_gradients(embgen, dnn, snli):
             embgen.backward_pass(rate=rate)
             dnn.backward_pass(embgen.pass_grad, rate=rate)
 
-            analytic_grad = embgen.dws[dep].flat[idx]
+            analytic_grad = embgen.wgrads[dep].flat[idx]
 
             assert np.allclose(analytic_grad, numerical_grad)

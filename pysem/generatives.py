@@ -36,28 +36,31 @@ class EmbeddingGenerator(DependencyNetwork):
         A dictionary that maps each dependency to a collection of words.
     parser : callable
         The parser used to produce a dependency tree from a provided sentence.
-    weights : defaultdict
+    d_weights : dict
         Matches each known dependency with a corresponding weight matrix.
-    word_weights : dict
+    w_weights : dict
         Matches each known dependency with a corresponding weight matrix for
         predicting the word occupying the dependency in question.
-    wgrads : defaultdict
+    dgrads : defaultdict
         Matches each known dependency with the corresponding weight gradient.
+    wgrads : defaultdict
+        Matches each known dependency with a corresponding weight matrix for
+        predicting the word occupying the dependency in question.
     tree : list
         A list of the nodes that make up the dependency tree for predicted
         sentence. Computed when forward_pass is called.
     """
     def __init__(self, dim, subvocabs, vectors=None):
         self.dim = dim
-        self.weights = defaultdict(SquareZeros(self.dim))
         self.subvocabs = subvocabs
 
-        for dep in self.deps:
-            self.weights[dep] = self.gaussian_id(self.dim)
-
-        self.word_weights = {}
+        self.d_weights = {}
+        self.w_weights = {}
         self.idx_to_wrd = {}
         self.wrd_to_idx = {}
+
+        for dep in self.deps:
+            self.d_weights[dep] = self.gaussian_id(self.dim)
 
         self.pretrained_vectors(vectors) if vectors else self.random_vectors()
 
@@ -69,14 +72,14 @@ class EmbeddingGenerator(DependencyNetwork):
         for dep in self.deps:
             vsize = len(self.subvocabs[dep])
             vsize = vsize if vsize > 0 else 1
-            self.word_weights[dep] = np.zeros((vsize, self.dim))
+            self.w_weights[dep] = np.zeros((vsize, self.dim))
 
             for idx, word in enumerate(self.subvocabs[dep]):
                 try:
-                    self.word_weights[dep][idx, :] = np.copy(pretrained[word])
+                    self.w_weights[dep][idx, :] = np.copy(pretrained[word])
                 except KeyError:
                     vec = np.random.normal(0, scale=eps, size=self.dim)
-                    self.word_weights[dep][idx, :] = vec
+                    self.w_weights[dep][idx, :] = vec
 
             vocab = self.subvocabs[dep]
             self.idx_to_wrd[dep] = {ind: wrd for ind, wrd in enumerate(vocab)}
@@ -88,7 +91,7 @@ class EmbeddingGenerator(DependencyNetwork):
         for dep in self.deps:
             vsize = len(self.subvocabs[dep])
             vsize = vsize if vsize > 0 else 1
-            self.word_weights[dep] = np.random.random((vsize, self.dim)) * eps
+            self.w_weights[dep] = np.random.random((vsize, self.dim)) * eps
 
             vocab = self.subvocabs[dep]
             self.idx_to_wrd[dep] = {ind: wrd for ind, wrd in enumerate(vocab)}
@@ -103,8 +106,8 @@ class EmbeddingGenerator(DependencyNetwork):
         '''Compute gradients and update every weight matrix used to predict
         words at each node in the tree.'''
         self.reset_comp_graph()
-        self.wgrads = defaultdict(SquareZeros(self.dim))
-        self.dws = {d: np.zeros_like(self.word_weights[d]) for d in self.deps}
+        self.dgrads = defaultdict(SquareZeros(self.dim))
+        self.wgrads = {d: np.zeros_like(self.w_weights[d]) for d in self.deps}
         self.rate = rate
         self.compute_gradients()
         self.update_weights()
@@ -116,7 +119,7 @@ class EmbeddingGenerator(DependencyNetwork):
             if node.head.idx == node.idx:
                 node.embedding = root_embedding
                 node.computed = True
-                product = np.dot(self.word_weights[node.dep_], node.embedding)
+                product = np.dot(self.w_weights[node.dep_], node.embedding)
                 node.probs = self.softmax(product)
                 idx = np.argmax(node.probs, axis=0)[0]
                 node.pword = self.idx_to_wrd[node.dep_][idx]
@@ -125,11 +128,11 @@ class EmbeddingGenerator(DependencyNetwork):
         for node in self.tree:
             parent = self.get_parent(node)
             if not node.computed and parent.computed:
-                extract = np.dot(self.weights[node.dep_], parent.embedding)
+                extract = np.dot(self.d_weights[node.dep_], parent.embedding)
                 extract = np.tanh(extract)
                 node.embedding = extract
                 node.computed = True
-                product = np.dot(self.word_weights[node.dep_], node.embedding)
+                product = np.dot(self.w_weights[node.dep_], node.embedding)
                 node.probs = self.softmax(product)
                 idx = np.argmax(node.probs, axis=0)[0]
 
@@ -154,21 +157,21 @@ class EmbeddingGenerator(DependencyNetwork):
             children_computed = [c.computed for c in children]
 
             if not node.computed and all(children_computed):
-                predgrad = node.probs - node.tvals
-                ngrad = np.dot(self.word_weights[node.dep_].T, predgrad)
-                wp_grad = np.dot(predgrad, node.embedding.T)
+                dp = node.probs - node.tvals
+                dn = np.dot(self.w_weights[node.dep_].T, dp)
+                dw = np.dot(dp, node.embedding.T)
 
-                self.dws[node.dep_] += wp_grad
+                self.wgrads[node.dep_] += dw
 
                 for child in children:
-                    wgrad = np.dot(child.gradient, node.embedding.T)
-                    ngrad += np.dot(self.weights[child.dep_].T, child.gradient)
-                    self.wgrads[child.dep_] += wgrad
+                    dd = np.dot(child.gradient, node.embedding.T)
+                    dn += np.dot(self.d_weights[child.dep_].T, child.gradient)
+                    self.dgrads[child.dep_] += dd
 
                 if node.head.idx == node.idx:
-                    node.gradient = ngrad
+                    node.gradient = dn
                 else:
-                    node.gradient = self.tanh_grad(node.embedding) * ngrad
+                    node.gradient = self.tanh_grad(node.embedding) * dn
 
                 node.computed = True
 
@@ -214,10 +217,10 @@ class EmbeddingGenerator(DependencyNetwork):
 
     def update_weights(self):
         '''Use gradients to update the weights/biases for each dependency.'''
-        for dep in self.wgrads:
+        for dep in self.dgrads:
             count = sum([1 for node in self.tree if node.dep_ == dep])
-            self.weights[dep] -= self.rate * self.wgrads[dep] / count
-            self.word_weights[dep] -= self.rate * self.dws[dep] / count
+            self.d_weights[dep] -= self.rate * self.dgrads[dep] / count
+            self.w_weights[dep] -= self.rate * self.wgrads[dep] / count
 
 
 class TreeGenerator(DependencyNetwork):
