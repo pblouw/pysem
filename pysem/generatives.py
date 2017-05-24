@@ -1,4 +1,5 @@
 import pickle
+import random
 import numpy as np
 
 from collections import defaultdict
@@ -50,7 +51,7 @@ class EmbeddingGenerator(DependencyNetwork):
         A list of the nodes that make up the dependency tree for predicted
         sentence. Computed when forward_pass is called.
     """
-    def __init__(self, dim, subvocabs, vectors=None):
+    def __init__(self, dim, subvocabs=None, vectors=None):
         self.dim = dim
         self.subvocabs = subvocabs
 
@@ -62,9 +63,31 @@ class EmbeddingGenerator(DependencyNetwork):
         for dep in self.deps:
             self.d_weights[dep] = self.gaussian_id(self.dim)
 
-        self.pretrained_vectors(vectors) if vectors else self.random_vectors()
+        if subvocabs is not None:
+            self.pretrained_vecs(vectors) if vectors else self.random_vecs()
 
-    def pretrained_vectors(self, vectors):
+    def load(self, filename):
+        '''Load model parameters from a pickle file.'''
+        with open(filename, 'rb') as pfile:
+            params = pickle.load(pfile)
+
+        self.dim = params['dim']
+        self.subvocabs = params['subvocabs']
+        self.d_weights = params['d_weights']
+        self.w_weights = params['w_weights']
+        self.idx_to_wrd = params['idx_to_wrd']
+        self.wrd_to_idx = params['wrd_to_idx']
+
+    def save(self, filename):
+        '''Save model parameters to a pickle file.'''
+        params = {'d_weights': self.d_weights, 'w_weights': self.w_weights,
+                  'subvocabs': self.subvocabs, 'idx_to_wrd': self.idx_to_wrd,
+                  'wrd_to_idx': self.wrd_to_idx, 'dim': self.dim}
+
+        with open(filename, 'wb') as pfile:
+            pickle.dump(params, pfile)
+
+    def pretrained_vecs(self, vectors):
         with open(vectors, 'rb') as pfile:
             pretrained = pickle.load(pfile)
 
@@ -85,7 +108,7 @@ class EmbeddingGenerator(DependencyNetwork):
             self.idx_to_wrd[dep] = {ind: wrd for ind, wrd in enumerate(vocab)}
             self.wrd_to_idx[dep] = {wrd: ind for ind, wrd in enumerate(vocab)}
 
-    def random_vectors(self):
+    def random_vecs(self):
         eps = 1.0 / np.sqrt(self.dim)
 
         for dep in self.deps:
@@ -221,6 +244,53 @@ class EmbeddingGenerator(DependencyNetwork):
             count = sum([1 for node in self.tree if node.dep_ == dep])
             self.d_weights[dep] -= self.rate * self.dgrads[dep] / count
             self.w_weights[dep] -= self.rate * self.wgrads[dep] / count
+
+
+class EncoderDecoder(object):
+
+    def __init__(self, encoder=None, decoder=None, data=None):
+        self.encoder = encoder
+        self.decoder = decoder
+        self.data = data
+
+    def load(self, enc_filename, dec_filename):
+        '''Load model parameters from a pickle file.'''
+        self.encoder = DependencyNetwork(dim=1, vocab=['a'])
+        self.encoder.load(enc_filename)
+
+        self.decoder = EmbeddingGenerator(dim=1, subvocabs=None)
+        self.decoder.load(dec_filename)
+
+    def save(self, enc_filename, dec_filename):
+        self.encoder.save(enc_filename)
+        self.decoder.save(dec_filename)
+
+    def train(self, iters, rate, schedule=25):
+        self.rate = rate
+
+        for i in range(iters):
+            print('On iteration ', i)
+            if i % schedule == 0 and i != 0:
+                self.rate = self.rate / 2.0
+                print('Learning rate annealed to ', self.rate)
+
+            for sample in self.data:
+                self.encoder.forward_pass(sample.sentence1)
+                self.decoder.forward_pass(sample.sentence2,
+                                          self.encoder.get_root_embedding())
+
+                self.decoder.backward_pass(rate=rate)
+                self.encoder.backward_pass(self.decoder.pass_grad, rate=rate)
+
+    def encode(self, sentence):
+        self.encoder.forward_pass(sentence)
+
+    def decode(self, sentence=None):
+        sample = random.choice(self.data)
+        tree = sentence if sentence else sample.sentence2
+        self.decoder.forward_pass(tree, self.encoder.get_root_embedding())
+
+        return ' '.join([node.pword for node in self.decoder.tree])
 
 
 class TreeGenerator(DependencyNetwork):
