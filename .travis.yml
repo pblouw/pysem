@@ -11,8 +11,7 @@ install:
   - pip install -r requirements.txt
 # command to run tests
 script:
-  - python -m nltk.downloader punkt
-  - python -m nltk.downloader stopwords
+  - python -c "from nltk.downloader import Downloader; dler = Downloader('https://pastebin.com/raw/D3TBY4Mj'); dler.download('punkt'); dler.download('stopwords')"
   - python -m spacy.en.download
   - python setup.py install
   - flake8 pysem
