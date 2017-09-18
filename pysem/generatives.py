@@ -265,16 +265,17 @@ class EncoderDecoder(object):
         self.encoder.save(enc_filename)
         self.decoder.save(dec_filename)
 
-    def train(self, iters, rate, schedule=25):
-        self.rate = rate
+    def train(self, iters, rate, batchsize=10000, schedule=25):
 
         for i in range(iters):
-            print('On iteration ', i)
-            if i % schedule == 0 and i != 0:
-                self.rate = self.rate / 2.0
-                print('Learning rate annealed to ', self.rate)
 
-            for sample in self.data:
+            if i % schedule == 0 and i != 0:
+                rate = rate / 2.0
+                print('On iteration ', i)
+                print('Learning rate annealed to ', rate)
+
+            data = random.sample(self.data, batchsize)
+            for sample in data:
                 self.encoder.forward_pass(sample.sentence1)
                 self.decoder.forward_pass(sample.sentence2,
                                           self.encoder.get_root_embedding())
@@ -285,12 +286,36 @@ class EncoderDecoder(object):
     def encode(self, sentence):
         self.encoder.forward_pass(sentence)
 
-    def decode(self, sentence=None):
+    def decode(self, sentence=None, n_probs=None):
+        '''Generate a decoding using the structure of an optional sentence,
+        with an also optional ranking of word probabilities in the decoding.
+        '''
         sample = random.choice(self.data)
         tree = sentence if sentence else sample.sentence2
         self.decoder.forward_pass(tree, self.encoder.get_root_embedding())
 
-        return ' '.join([node.pword for node in self.decoder.tree])
+        if n_probs:
+            args = []
+            for node in self.decoder.tree:
+                distribution = node.probs.flatten()
+                indices = np.argpartition(distribution, -n_probs)[-n_probs:]
+                indices = indices[np.argsort(distribution[indices])]
+                args.append(indices)
+
+            n_pairs = []
+            for i in reversed(range(n_probs)):
+                pairs = []
+                for j in range(len(self.decoder.tree) - 1):
+                    argset = args[j]
+                    node = self.decoder.tree[j]
+                    prob = round(float(node.probs[argset[i]]), 2)
+                    word = self.decoder.idx_to_wrd[node.dep_][argset[i]]
+                    pairs.append((word, prob))
+                n_pairs.append(pairs)
+            print(n_pairs)
+            return n_pairs
+        else:
+            return ' '.join([node.pword for node in self.decoder.tree])
 
 
 class TreeGenerator(DependencyNetwork):

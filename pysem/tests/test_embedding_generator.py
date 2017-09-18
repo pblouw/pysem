@@ -1,6 +1,8 @@
 import random
 import numpy as np
 
+from pysem.generatives import EncoderDecoder
+
 n_gradient_checks = 25
 rate = 0.01
 delta = 1e-6
@@ -101,3 +103,20 @@ def test_word_weight_gradients(embgen, dnn, snli):
             analytic_grad = embgen.wgrads[dep].flat[idx]
 
             assert np.allclose(analytic_grad, numerical_grad)
+
+
+def test_encoder_decoder(embgen, dnn, snli):
+    sample = random.choice(snli.train_data)
+    s1 = sample.sentence1
+    s2 = sample.sentence2
+
+    model = EncoderDecoder(dnn, embgen, snli.train_data)
+    model.encode(s1)
+    probs = model.decode(s2, n_probs=2)
+
+    assert len(probs) == 2
+
+    model.train(iters=1, rate=rate, batchsize=1)
+
+    assert all(n.computed for n in model.encoder.tree)
+    assert all(n.computed for n in model.decoder.tree)
