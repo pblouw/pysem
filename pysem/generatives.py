@@ -312,8 +312,9 @@ class EncoderDecoder(object):
                     word = self.decoder.idx_to_wrd[node.dep_][argset[i]]
                     pairs.append((word, prob))
                 n_pairs.append(pairs)
-            print(n_pairs)
+
             return n_pairs
+
         else:
             return ' '.join([node.pword for node in self.decoder.tree])
 
