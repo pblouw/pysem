@@ -112,9 +112,9 @@ def test_encoder_decoder(embgen, dnn, snli):
 
     model = EncoderDecoder(dnn, embgen, snli.train_data)
     model.encode(s1)
-    probs = model.decode(s2, n_probs=2)
+    probs = model.decode(s2, n_probs=1)
 
-    assert len(probs) == 2
+    assert len(probs) == 1
 
     model.train(iters=1, rate=rate, batchsize=1)
 
