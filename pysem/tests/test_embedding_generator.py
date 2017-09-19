@@ -41,13 +41,13 @@ def test_backward_pass(embgen, dnn, snli):
     s1 = sample.sentence1
     s2 = sample.sentence2
 
-    for _ in range(50):
+    for _ in range(100):
         dnn.forward_pass(s1)
         embgen.forward_pass(s2, dnn.get_root_embedding())
         embgen.backward_pass(rate=rate)
         dnn.backward_pass(embgen.pass_grad, rate=rate)
 
-    node = random.choice(embgen.tree)
+    node = [n for n in embgen.tree if n.head.idx == n.idx].pop()
     assert node.pword == node.lower_
 
 

@@ -18,7 +18,7 @@ def test_tree_generator(tree_gen, dnn, snli):
         dnn.backward_pass(tree_gen.pass_grad, rate=rate)
 
     for node in tree_gen.sequence:
-        print(node.lower_)
+
         assert node.computed
         assert isinstance(node.embedding, np.ndarray)
         assert isinstance(node.py_w, np.ndarray)
@@ -28,10 +28,6 @@ def test_tree_generator(tree_gen, dnn, snli):
         assert isinstance(node.pw, str)
         assert isinstance(node.ph, str)
         assert isinstance(node.pd, str)
-
-        assert node.lower_ == node.pw
-        assert node.dep_ == node.pd
-        assert node.head.lower_ == node.ph
 
     tree_gen.predict(dnn.get_root_embedding(), n)
 
