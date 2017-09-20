@@ -286,7 +286,7 @@ class EncoderDecoder(object):
     def encode(self, sentence):
         self.encoder.forward_pass(sentence)
 
-    def decode(self, sentence=None, n_probs=None):
+    def decode(self, sentence=None, n_probs=None, suppress_punc=False):
         '''Generate a decoding using the structure of an optional sentence,
         with an also optional ranking of word probabilities in the decoding.
         '''
@@ -305,7 +305,8 @@ class EncoderDecoder(object):
             n_pairs = []
             for i in reversed(range(n_probs)):
                 pairs = []
-                for j in range(len(self.decoder.tree) - 1):
+                sval = 1 if suppress_punc else 0
+                for j in range(len(self.decoder.tree) - sval):
                     argset = args[j]
                     node = self.decoder.tree[j]
                     prob = round(float(node.probs[argset[i]]), 2)
