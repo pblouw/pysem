@@ -47,12 +47,12 @@ In the examples directory, there are Jupyter notebooks illustrating the creation
 * generative models for generating sentences that are entailed by a given 
   sentence. 
 
-Note that to you will need to download a dump of wikipedia articles and preprocess them using `this tool <https://github.com/attardi/wikiextractor>`_. You will also need to change the path in the notebook to point to where you have saved this dump locally.
+Note that to you will need to download a dump of wikipedia articles and preprocess them using `this tool <https://github.com/attardi/wikiextractor>`_. You will also need to change the path in the notebook to point to where you have saved this dump locally. For the generative modelling example, the pretrained model parameters used in the notebook can be found `here <https://drive.google.com/open?id=0BxRAh6Eg1us4SVRkWWxJMXhWTDg>`_.
 
 Installation
 -------------
 
-Pysem requires Python 3.5, mostly to support effective multiprocessing. For installation, it is easist to use the `Anaconda <https://www.continuum.io/downloads>` Python distribution to create a conda environment as follows. Run these commands from inside the cloned repository:
+Pysem requires Python 3.5, mostly to support effective multiprocessing. For installation, it is easist to use the `Anaconda <https://www.continuum.io/downloads>`_ Python distribution to create a conda environment as follows. Run these commands from inside the cloned repository:
 
 .. code:: shell
 
